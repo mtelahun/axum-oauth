@@ -1,6 +1,6 @@
 mod authorizer;
 mod issuer;
-pub mod key;
+// pub mod key;
 mod registrar;
 pub mod scopes;
 

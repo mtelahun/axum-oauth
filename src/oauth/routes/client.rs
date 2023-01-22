@@ -1,6 +1,11 @@
-use crate::database::Database;
-use crate::error::Result;
-use crate::templates;
+use std::str::FromStr;
+
+use crate::oauth::{
+    database::Database,
+    error::{Result, Error},
+    models::{ClientId, client::ClientQuery, UserId},
+    templates,
+};
 
 use axum::{
     extract::{Form, FromRef, State},
@@ -11,11 +16,10 @@ use axum::{
 use axum_sessions::extractors::ReadableSession;
 use oxide_auth::primitives::registrar::{Client, RegisteredUrl};
 use serde::{Deserialize, Serialize};
-use tf_database::{
-    primitives::Key,
-    query::{ClientQuery, UserQuery},
-};
-use tf_models::ClientId;
+// use tf_database::{
+//     primitives::Key,
+//     query::{ClientQuery, UserQuery},
+// };
 
 pub fn routes<S>() -> Router<S>
 where
@@ -48,7 +52,7 @@ async fn post_client(
     session: ReadableSession,
     Form(client): Form<ClientForm>,
 ) -> Result<impl IntoResponse> {
-    let user = match session.get::<UserQuery>("user") {
+    let user = match session.get("username") {
         Some(user) => user,
         _ => return Ok(Redirect::to("/oauth/signin").into_response()),
     };
@@ -56,10 +60,11 @@ async fn post_client(
     let mut client_secret = None;
 
     let client_id = {
-        let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())?;
+        let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())
+            .map_err(|_| Error::InternalError)?;
 
         ClientQuery {
-            user_id: user.user_id,
+            user_id: UserId::from_str(user.as_str()).map_err(|_| Error::InternalError)?,
             id,
         }
     };
@@ -71,7 +76,7 @@ async fn post_client(
             let secret = nanoid::nanoid!(32);
 
             let client = Client::confidential(
-                &client_id.as_string(),
+                &client_id.to_string(),
                 RegisteredUrl::Semantic(client.redirect_uri.parse().unwrap()),
                 "".parse().unwrap(),
                 secret.as_bytes(),
@@ -82,7 +87,7 @@ async fn post_client(
             client
         }
         ClientType::Public => Client::public(
-            &client_id.as_string(),
+            &client_id.to_string(),
             RegisteredUrl::Semantic(client.redirect_uri.parse().unwrap()),
             "".parse().unwrap(),
         ),

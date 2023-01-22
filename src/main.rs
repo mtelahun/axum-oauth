@@ -5,7 +5,7 @@ use std::{
 
 use async_session::{async_trait, MemoryStore};
 use axum::{
-    extract::{FromRef, FromRequestParts, State},
+    extract::{FromRequestParts},
     headers::{authorization::Bearer, Authorization},
     http::{request::Parts, StatusCode},
     response::{IntoResponse},
@@ -14,11 +14,12 @@ use axum::{
 };
 use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
 use once_cell::sync::Lazy;
-use oxide_auth::endpoint::{OwnerConsent, Solicitation, WebResponse, WebRequest, OwnerSolicitor};
-use oxide_auth::frontends::simple::endpoint::{FnSolicitor, Generic, Vacant};
+use oxide_auth::{
+    endpoint::{OwnerConsent, Solicitation}, 
+    primitives::registrar::RegisteredUrl
+};
 use oxide_auth::primitives::prelude::*;
 use oxide_auth_axum::{OAuthRequest, OAuthResponse, WebError};
-use secrecy::Secret;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
@@ -88,8 +89,15 @@ async fn main() {
         .init();
 
     let auth_db = AuthDB::new();
-    auth_db.insert("janedoe", Secret::from("secret".to_string()));
-    let state = oauth::state::State::new();
+    auth_db.register_client(
+        Client::public(
+            "LocalClient",
+            RegisteredUrl::Semantic(
+                "https://www.thunderclient.com/oauth/callback".parse().unwrap(),
+            ),
+            "default-scope".parse().unwrap(),
+        ));
+    let state = oauth::state::State::new(auth_db);
     let store = MemoryStore::new();
     let state = AppState {
         store,

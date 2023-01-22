@@ -1,3 +1,10 @@
+use crate::oauth::{
+    database::{Database, resource::user::{AuthorizationQuery, Authorization}},
+    routes::session::Session,
+    solicitor::Solicitor,
+    Consent,
+    error::Error,
+};
 use axum::{
     extract::{FromRef, Query, State},
     response::IntoResponse,
@@ -9,7 +16,6 @@ use oxide_auth::{
     frontends::simple::endpoint::FnSolicitor,
 };
 use oxide_auth_axum::{OAuthRequest, OAuthResponse, WebError};
-use super::super::primitives::key::Key;
 
 pub fn routes<S>() -> Router<S>
 where

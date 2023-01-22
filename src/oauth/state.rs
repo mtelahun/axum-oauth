@@ -1,6 +1,6 @@
 use oxide_auth::{
     frontends::simple::endpoint::Vacant,
-    primitives::{authorizer::AuthMap, generator::RandomGenerator, issuer::TokenMap, registrar::{ClientMap, Client}},
+    primitives::{authorizer::AuthMap, generator::RandomGenerator, issuer::TokenMap},
 };
 use oxide_auth_async::primitives;
 use std::sync::Arc;
@@ -39,16 +39,3 @@ impl State {
         }
     }
 }
-
-// impl fmt::Debug for OAuthState {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         let registrar = self.registrar.lock().unwrap();
-//         let authorizer = self.authorizer.lock().unwrap();
-//         let issuer = self.issuer.lock().unwrap();
-//         f.debug_struct("OAuthState")
-//             .field("registrar", &registrar)
-//             .field("authorizer", &authorizer)
-//             .field("issuer", &issuer)
-//             .finish()
-//     }
-// }
