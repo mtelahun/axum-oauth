@@ -71,7 +71,7 @@ where
         .merge(oauth::routes())
 //        .merge(index::routes())
         .nest("/client", client::routes())
-//        .nest("/signin", signin::routes())
+        .nest("/signin", signin::routes())
 //        .nest("/signout", signout::routes().with_state(()))
         .nest("/signup", signup::routes())
         .route("/whoami", get(whoami))
@@ -85,7 +85,7 @@ async fn whoami(grant: Grant<()>) -> impl IntoResponse {
 mod client;
 // mod index;
 mod oauth;
-// mod signin;
+mod signin;
 // mod signout;
 mod signup;
 

@@ -48,11 +48,11 @@ struct ClientForm {
 }
 
 async fn post_client(
-    State(db): State<Database>,
+    State(mut db): State<Database>,
     session: ReadableSession,
-    Form(client): Form<ClientForm>,
+    Form(client_form): Form<ClientForm>,
 ) -> Result<impl IntoResponse> {
-    let user = match session.get("username") {
+    let user: String = match session.get("username") {
         Some(user) => user,
         _ => return Ok(Redirect::to("/oauth/signin").into_response()),
     };
@@ -69,15 +69,15 @@ async fn post_client(
         }
     };
 
-    let client_name = client.name;
+    let client_name = client_form.name;
 
-    let client = match client.r#type {
+    let client = match client_form.r#type {
         ClientType::Confidential => {
             let secret = nanoid::nanoid!(32);
 
             let client = Client::confidential(
                 &client_id.to_string(),
-                RegisteredUrl::Semantic(client.redirect_uri.parse().unwrap()),
+                RegisteredUrl::Semantic(client_form.redirect_uri.parse().unwrap()),
                 "".parse().unwrap(),
                 secret.as_bytes(),
             );
@@ -85,15 +85,17 @@ async fn post_client(
             client_secret = Some(secret);
 
             client
-        }
+        },
         ClientType::Public => Client::public(
             &client_id.to_string(),
-            RegisteredUrl::Semantic(client.redirect_uri.parse().unwrap()),
+            RegisteredUrl::Semantic(client_form.redirect_uri.parse().unwrap()),
             "".parse().unwrap(),
-        ),
+        )
     };
 
-    db.register_client(&client_id, client, client_name, &user)?;
+    db.register_client(&client_id.to_string(), client, &client_name, &user)
+        .await
+        .map_err(|e| Error::Database { source: (e) })?;
 
     #[derive(Serialize)]
     struct Response {

@@ -28,6 +28,8 @@ pub mod state;
 use oauth::database::Database as AuthDB;
 use state::AppState;
 
+use crate::oauth::database::UserRecord;
+
 static KEYS: Lazy<Keys> = Lazy::new(|| {
     let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     Keys::new(secret.as_bytes())
@@ -89,14 +91,20 @@ async fn main() {
         .init();
 
     let auth_db = AuthDB::new();
+    let user = UserRecord::new("foo", "secret");
+    auth_db.register_user(user);
     auth_db.register_client(
+        "LocalClient",
         Client::public(
             "LocalClient",
             RegisteredUrl::Semantic(
                 "https://www.thunderclient.com/oauth/callback".parse().unwrap(),
             ),
             "default-scope".parse().unwrap(),
-        ));
+        ),
+        "LocalClient",
+        user.username().unwrap_or("foo".to_string()).as_str()
+    );
     let state = oauth::state::State::new(auth_db);
     let store = MemoryStore::new();
     let state = AppState {

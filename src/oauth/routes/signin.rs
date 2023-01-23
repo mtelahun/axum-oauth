@@ -1,15 +1,10 @@
 use super::{Callback, UserForm};
-use crate::{
-    database::{
-        resource::user::{User, Username},
-        Database,
-    },
-    error::Error,
-    error::Result,
+use crate::oauth::{
+    database::Database,
+    error::{Error, Result},
     templates::SignIn,
 };
 
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     extract::{Form, FromRef, Query, State},
     http::StatusCode,
@@ -22,7 +17,7 @@ use axum_sessions::extractors::WritableSession;
 pub fn routes<S>() -> Router<S>
 where
     S: Send + Sync + 'static + Clone,
-    crate::State: FromRef<S>,
+    crate::oauth::state::State: FromRef<S>,
     Database: FromRef<S>,
 {
     Router::new().route("/", get(get_signin).post(post_signin))
@@ -40,37 +35,14 @@ async fn post_signin(
     State(db): State<Database>,
     query: Option<Query<Callback<'_>>>,
     mut session: WritableSession,
-    Form(user): Form<UserForm>,
+    Form(user_form): Form<UserForm>,
 ) -> Result<impl IntoResponse> {
     let query = query.as_ref().map(|x| x.as_str());
 
-    let authorized = tokio::task::spawn_blocking({
-        //let db = db.clone();
-        let user = user.clone();
-
-        move || {
-            let collection = db.root::<Username>()?.traverse::<User>()?;
-
-            Ok::<_, Error>(
-                collection
-                    .get(&user.username)?
-                    .ok_or(argon2::password_hash::Error::Password)
-                    .map_err(Error::from)
-                    .and_then(|User { password, .. }| {
-                        let hash = PasswordHash::new(&password)?;
-                        Ok(Argon2::default().verify_password(user.password.as_bytes(), &hash)?)
-                    })
-                    .and_then(|_| {
-                        let user = collection.key(&user.username)?.ok_or(Error::NotFound)?;
-
-                        session.insert("user", user).unwrap();
-                        Ok(())
-                    })
-                    .is_ok(),
-            )
-        }
-    })
-    .await??;
+    let authorized = db.verify_password(&user_form.username, &user_form.password)
+        .await
+        .map_err(|e| Error::Database { source: (e) })?;
+    session.insert("user", user_form.username);
 
     if !authorized {
         Ok((

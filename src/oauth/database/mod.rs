@@ -1,6 +1,6 @@
 use std::{sync::Arc, collections::HashMap};
 use oxide_auth::primitives::registrar::{ClientMap, Client};
-use secrecy::Secret;
+use secrecy::{Secret, ExposeSecret};
 use tokio::sync::RwLock;
 
 pub mod resource;
@@ -40,9 +40,29 @@ impl Database {
         map_lock.contains_key(username)
     }
 
-    pub async fn register_client(&mut self, client: Client) {
+    // XXX - Doesn't really belong in a storage interface. It's just expeditious.
+    pub async fn verify_password(&self, username: &String, password: &String) -> Result<bool, StoreError>
+    {
+        let map_lock = self.inner.user_db.read().await;
+        if ! map_lock.contains_key(username) {
+            return Err(StoreError::DoesNotExist)
+        }
+
+        let db_password = map_lock.get(username)
+            .ok_or(StoreError::DoesNotExist)?;
+        let result = password == db_password.expose_secret();
+
+        Ok(result)
+    }
+
+    pub async fn register_client(&mut self, client_id: &str, client: Client, client_name: &str, username: &str) -> Result<(), StoreError> {
         let mut map_lock = self.inner.client_db.write().await;
         map_lock.register_client(client);
+
+        // There is currently no easy way to search ClientMap for a record. So, this
+        // function will allways succeed. If the client is already in the ClientMap
+        // its current value will be updated with the new value.
+        Ok(())
     }
 }
 
@@ -58,16 +78,36 @@ pub struct UserRecord {
     password: Secret<String>,
 }
 
+impl UserRecord {
+    pub fn new(user: &str, password: &str) -> UserRecord
+    {
+        Self {
+            username: user.to_owned(),
+            password: Secret::from(password.to_owned()),
+        }
+    }
+
+    pub fn username(&self) -> Option<String>
+    {
+        if !self.username.is_empty() {
+            return Some(self.username.clone())
+        }
+
+        None
+    }
+}
+
 #[derive(Debug)]
 pub enum StoreError {
-    // Unable to find user in store
     DoesNotExist,
+    DuplicateRecord,
 }
 
 impl std::error::Error for StoreError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match *self {
             StoreError::DoesNotExist => None,
+            StoreError::DuplicateRecord => None,
         }
     }
 }
@@ -75,7 +115,8 @@ impl std::error::Error for StoreError {
 impl std::fmt::Display for StoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            StoreError::DoesNotExist => write!(f, "the username does not exist"),
+            StoreError::DoesNotExist => write!(f, "the record does not exist"),
+            StoreError::DuplicateRecord => write!(f, "attempted to insert duplicate record"),
         }
     }
 }
