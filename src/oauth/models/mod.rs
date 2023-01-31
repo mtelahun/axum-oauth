@@ -58,8 +58,8 @@ impl<'de, const L: usize> Deserialize<'de> for Id<L> {
 
 #[derive(Debug)]
 pub struct InvalidLengthError {
-    expected: usize,
-    actual: usize,
+    pub expected: usize,
+    pub actual: usize,
 }
 
 impl std::fmt::Display for InvalidLengthError {

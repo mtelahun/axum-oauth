@@ -72,7 +72,7 @@ where
 //        .merge(index::routes())
         .nest("/client", client::routes())
         .nest("/signin", signin::routes())
-//        .nest("/signout", signout::routes().with_state(()))
+        .nest("/signout", signout::routes().with_state(()))
         .nest("/signup", signup::routes())
         .route("/whoami", get(whoami))
         .layer(session_layer)
@@ -86,7 +86,7 @@ mod client;
 // mod index;
 mod oauth;
 mod signin;
-// mod signout;
+mod signout;
 mod signup;
 
 #[derive(Default, Serialize, Deserialize)]

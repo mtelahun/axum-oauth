@@ -39,10 +39,7 @@ async fn post_signup(
         return Ok(Redirect::to("signin"))
     }
 
-    let record = UserRecord {
-        username: user.username,
-        password: Secret::from_str(&user.password).map_err(|_| Error::InternalError)?,
-    };
+    let record = UserRecord::new(&user.username, &user.password);
     db.register_user(record).await;
 
     Ok(Redirect::to("/"))

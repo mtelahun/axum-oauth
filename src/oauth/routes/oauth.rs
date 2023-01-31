@@ -11,6 +11,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use axum_macros::debug_handler;
 use oxide_auth::{
     endpoint::{OwnerConsent, PreGrant, QueryParameter, Solicitation},
     frontends::simple::endpoint::FnSolicitor,
@@ -21,6 +22,7 @@ pub fn routes<S>() -> Router<S>
 where
     S: Send + Sync + 'static + Clone,
     crate::oauth::state::State: FromRef<S>,
+    crate::oauth::database::Database: FromRef<S>,
 {
     Router::new()
         .route("/authorize", get(get_authorize).post(post_authorize))
@@ -33,7 +35,7 @@ async fn get_authorize(
     State(db): State<Database>,
     Session { user }: Session,
     request: OAuthRequest,
-) -> Result<impl IntoResponse> {
+) -> Result<impl IntoResponse, Error> {
     state
         .endpoint()
         .await
@@ -42,7 +44,7 @@ async fn get_authorize(
         .execute(request)
         .await
         .map(IntoResponse::into_response)
-        .map_err(Into::into)
+        .map_err(|e| Error::OAuth { source: e })
 }
 
 async fn post_authorize(
@@ -51,42 +53,23 @@ async fn post_authorize(
     Query(consent): Query<Consent>,
     Session { user }: Session,
     request: OAuthRequest,
-) -> Result<impl IntoResponse> {
+) -> Result<impl IntoResponse, Error> {
     state
         .endpoint()
         .await
         .with_solicitor(FnSolicitor(
             move |_: &mut OAuthRequest, solicitation: Solicitation| {
                 if let Consent::Allow = consent {
-                    tokio::task::spawn_blocking({
-                        let PreGrant {
-                            client_id, scope, ..
-                        } = solicitation.pre_grant().clone();
-                        let db = db.clone();
+                    let PreGrant {
+                        client_id, scope, ..
+                    } = solicitation.pre_grant().clone();
 
-                        move || {
-                            let query = AuthorizationQuery {
-                                user,
-                                client: client_id.parse()?,
-                            };
+                    let previous_scope = db.get_scope(&user, &client_id);
+                    if previous_scope.is_none() || previous_scope.unwrap() < scope {
+                        db.update_client_scope(&scope);
+                    }
 
-                            let collection = db.root::<User>()?.traverse::<Authorization>()?;
-
-                            let authorization = collection.get(&query)?;
-
-                            if authorization.is_none()
-                                || authorization
-                                    .map(|authorization| authorization.scope < scope)
-                                    .unwrap_or_default()
-                            {
-                                collection.insert(&query, &Authorization { scope }, &user)?;
-                            }
-
-                            Ok::<_, Error>(())
-                        }
-                    });
-
-                    OwnerConsent::Authorized(user.as_string())
+                    OwnerConsent::Authorized(user.to_string())
                 } else {
                     OwnerConsent::Denied
                 }
@@ -96,7 +79,7 @@ async fn post_authorize(
         .execute(request)
         .await
         .map(IntoResponse::into_response)
-        .map_err(Into::into)
+        .map_err(|e| Error::OAuth { source: e })
 }
 
 async fn token(

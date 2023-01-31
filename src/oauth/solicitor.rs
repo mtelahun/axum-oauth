@@ -49,62 +49,44 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
             Err(err) => return err,
         };
 
-        let authorization = {
-            let inner = tokio::task::spawn_blocking({
-                let db = self.db.clone();
-                let query = AuthorizationQuery {
-                    user: self.user,
-                    client: client_id,
-                };
-                move || db.root::<User>()?.traverse::<Authorization>()?.get(&query)
-            })
-            .await
-            .map_err(map_err)
-            .map(|res| res.map_err(map_err))
-            .and_then(std::convert::identity);
-
-            match inner {
-                Ok(inner) => inner,
-                Err(err) => return err,
-            }
+        // Is there already an authorization (user:client pair) ?
+        let previous_scope = self.db.get_scope(&self.user, &client_id.id.to_string());
+        let authorization = match previous_scope {
+            Some(scope) => Some(Authorization { scope }),
+            _ => None,
         };
 
         match authorization {
+            // Yes, there is and it's scope >= requested scope. Return authorized consent.
             Some(Authorization { scope }) if scope >= solicitation.pre_grant().scope => {
                 return OwnerConsent::Authorized(self.user.to_string())
             }
+
+            // No, so continue on.
             _ => (),
         }
 
-        let (client, user) = {
-            let inner = tokio::task::spawn_blocking({
-                let db = self.db.clone();
-                let user = self.user;
-
-                move || {
-                    let client = db
-                        .root::<EncodedClient>()?
-                        .traverse::<ClientName>()?
-                        .get(&client_id)?;
-
-                    let user = db.root::<User>()?.get(&user)?;
-
-                    Ok::<_, Error>((client, user))
-                }
-            })
+        // Attempt to get user and encoded client records
+        let res = self.db.get_client_name(&client_id, &self.user)
             .await
-            .map_err(map_err)
-            .map(|res| res.map_err(map_err))
-            .and_then(std::convert::identity);
-
-            match inner {
-                Ok(inner) => inner,
-                Err(err) => return err,
-            }
+            .map_err(map_err);
+        let client = match res {
+            Ok(name) => name,
+            Err(err) => return err,
+        };
+        let res = self.db.get_user(&self.user)
+            .await
+            .map_err(map_err);
+        let user = match res {
+            Ok(user) => user,
+            Err(err) => return err,
         };
 
-        if let Some((client, user)) = client.zip(user) {
-            let body = Authorize::new(req, &solicitation, &user.username, &client.inner);
+        // create parameters for consent form and display it to the owner
+        if let Some((client, user)) = Some(client).zip(Some(user)) {
+            // username() is guaranteed to return a value because user was returned from the db
+            let username = user.username().unwrap();
+            let body = Authorize::new(req, &solicitation, &username, &client.inner);
 
             match body.render().map_err(map_err) {
                 Ok(inner) => OwnerConsent::InProgress(

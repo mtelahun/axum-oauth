@@ -1,10 +1,12 @@
 use super::session::Session;
 use crate::{
-    database::{
-        resource::{client::EncodedClient, user::User},
-        Database,
+    oauth::{
+        database::{
+            resource::client::EncodedClient,
+            Database,
+        },
+        templates,
     },
-    templates,
 };
 use axum::{
     extract::{FromRef, State},

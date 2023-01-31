@@ -30,56 +30,6 @@ use state::AppState;
 
 use crate::oauth::database::UserRecord;
 
-static KEYS: Lazy<Keys> = Lazy::new(|| {
-    let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
-    Keys::new(secret.as_bytes())
-});
-
-async fn index(claims: Claims) -> Result<String, AuthError> {
-    Ok(format!("Hello World!\nYour data:\n {}", claims))
-}
-
-// async fn authorize(State(state): State<AppState>, req: OAuthRequest) -> Result<OAuthResponse, AuthError> {
-    // Check if the user sent the credentials
-    // if payload.client_id.is_empty() || payload.client_secret.is_empty() {
-    //     return Err(AuthError::MissingCredentials);
-    // }
-
-    // // Here, check the user credentials from a database
-    // if payload.client_id != "foo" || payload.client_secret != "bar" {
-    //     return Err(AuthError::WrongCredentials);
-    // }
-
-    // let claims = Claims {
-    //     sub: "b@b.com".to_owned(),
-    //     company: "ACME".to_owned(),
-    //     // Mandatory expiry time as UTC timestamp
-    //     exp: 2000000000,
-    // };
-
-    // // Create the authorization token
-    // let token = encode(&Header::default(), &claims, &KEYS.encoding)
-    //     .map_err(|_| AuthError::TokenCreation)?;
-
-    // println!("request:\n{:?}", req);
-// }
-
-// pub async fn authorize(
-//     State(state): State<AppState>, req: OAuthRequest,
-// ) -> Result<OAuthResponse, WebError> {
-//     tracing::debug!("req = {:?}", req);
-//     let endpoint = state.oauth
-//         .endpoint();
-//     tracing::debug!("    after endpoint");
-//     let with_sol = endpoint.with_solicitor(FnSolicitor(consent_form));
-//     tracing::debug!("    after with_solicitor");
-//     let mut auth_flow = with_sol.authorization_flow();
-//     tracing::debug!("    after auth_flow");
-//     let res = auth_flow.execute(req)?;
-//     tracing::debug!("exiting authorize()");
-//     Ok(res)
-// }
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -90,31 +40,32 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let auth_db = AuthDB::new();
+    let mut auth_db = AuthDB::new();
     let user = UserRecord::new("foo", "secret");
-    auth_db.register_user(user);
-    auth_db.register_client(
+    let username = user.username().unwrap_or("foo".to_string());
+    auth_db.register_user(user).await;
+    let _ = auth_db.register_client(
         "LocalClient",
         Client::public(
             "LocalClient",
             RegisteredUrl::Semantic(
                 "https://www.thunderclient.com/oauth/callback".parse().unwrap(),
             ),
-            "default-scope".parse().unwrap(),
+            "account::read".parse().unwrap(),
         ),
         "LocalClient",
-        user.username().unwrap_or("foo".to_string()).as_str()
-    );
-    let state = oauth::state::State::new(auth_db);
-    let store = MemoryStore::new();
+        &username,
+    ).await;
+    let state = oauth::state::State::new(auth_db.clone());
+    let sessions = MemoryStore::new();
     let state = AppState {
-        store,
-        state: state,
+        sessions,
+        state,
+        database: auth_db,
     };
 
     let app = Router::new()
-        .route("/", get(index))
-        // .route("/authorize", get(authorize))
+        .nest("/oauth", crate::oauth::routes::routes())
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -125,70 +76,6 @@ async fn main() {
         .await
         .unwrap();
 }
-
-struct Keys {
-    encoding: EncodingKey,
-    decoding: DecodingKey,
-}
-
-impl Keys {
-    fn new(secret: &[u8]) -> Self {
-        Self {
-            encoding: EncodingKey::from_secret(secret),
-            decoding: DecodingKey::from_secret(secret),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String,
-    company: String,
-    exp: usize,
-}
-
-impl Display for Claims {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Email: {}\nCompany: {}", self.sub, self.company)
-    }
-}
-
-#[async_trait]
-impl<S> FromRequestParts<S> for Claims
-where
-    S: Send + Sync,
-{
-    type Rejection = AuthError;
-
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // Extract the token from the authorization header
-        let TypedHeader(Authorization(bearer)) = parts
-            .extract::<TypedHeader<Authorization<Bearer>>>()
-            .await
-            .map_err(|_| AuthError::InvalidToken)?;
-        // Decode the user data
-        let token_data = decode::<Claims>(bearer.token(), &KEYS.decoding, &Validation::default())
-            .map_err(|_| AuthError::InvalidToken)?;
-
-        Ok(token_data.claims)
-    }
-}
-
-#[derive(Debug, Serialize)]
-struct AuthBody {
-    auth: String,
-    //query: NormalizedParameter,
-    //body: String,
-}
-
-// impl AuthBody {
-//     fn new(access_token: String) -> Self {
-//         Self {
-//             access_token,
-//             token_type: "Bearer".to_string(),
-//         }
-//     }
-// }
 
 #[derive(Debug, Deserialize)]
 struct AuthPayload {
