@@ -44,16 +44,10 @@ async fn main() {
     let user = UserRecord::new("foo", "secret");
     let username = user.username().unwrap_or("foo".to_string());
     auth_db.register_user(user).await;
-    let _ = auth_db.register_client(
+    let _ = auth_db.register_public_client(
         "LocalClient",
-        Client::public(
-            "LocalClient",
-            RegisteredUrl::Semantic(
-                "https://www.thunderclient.com/oauth/callback".parse().unwrap(),
-            ),
-            "account::read".parse().unwrap(),
-        ),
-        "LocalClient",
+        "https://www.thunderclient.com/oauth/callback",
+        "account::read",
         &username,
     ).await;
     let state = oauth::state::State::new(auth_db.clone());

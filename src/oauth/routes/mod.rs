@@ -69,7 +69,7 @@ where
 
     Router::new()
         .merge(oauth::routes())
-//        .merge(index::routes())
+        .merge(index::routes())
         .nest("/client", client::routes())
         .nest("/signin", signin::routes())
         .nest("/signout", signout::routes().with_state(()))
@@ -83,7 +83,7 @@ async fn whoami(grant: Grant<()>) -> impl IntoResponse {
 }
 
 mod client;
-// mod index;
+mod index;
 mod oauth;
 mod signin;
 mod signout;

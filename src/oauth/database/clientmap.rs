@@ -1,14 +1,13 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, borrow::Cow};
 
 use once_cell::sync::Lazy;
-use oxide_auth::primitives::registrar::{EncodedClient, PasswordPolicy, Client, Argon2};
-
+use oxide_auth::{primitives::registrar::{Argon2, Client, EncodedClient, PasswordPolicy, BoundClient, RegistrarError, ClientUrl, RegisteredClient}, endpoint::{Scope, PreGrant, Registrar}};
 
 static DEFAULT_PASSWORD_POLICY: Lazy<Argon2> = Lazy::new(Argon2::default);
 
 #[derive(Default)]
 pub struct ClientMap {
-    clients: HashMap<String, EncodedClient>,
+    pub (crate) clients: HashMap<String, ClientRecord>,
     password_policy: Option<Box<dyn PasswordPolicy>>,
 }
 
@@ -19,10 +18,17 @@ impl ClientMap {
     }
 
     /// Insert or update the client record.
-    pub fn register_wrapped_client(&mut self, client: WrappedClient) {
+    pub fn register_client(&mut self, id: &str, name: &str, user: &str, client: Client) {
+        let id = id.to_owned();
         let password_policy = Self::current_policy(&self.password_policy);
+        let record = ClientRecord {
+            id: id.clone(),
+            name: name.to_owned(),
+            username: user.to_owned(),
+            encoded_client: client.encode(password_policy),
+        };
         self.clients
-            .insert(client.client_id, client.inner.encode(password_policy));
+            .insert(id, record);
     }
 
     /// Change how passwords are encoded while stored.
@@ -39,27 +45,73 @@ impl ClientMap {
     }
 }
 
-impl Extend<WrappedClient> for ClientMap {
-    fn extend<I>(&mut self, iter: I)
-    where
-        I: IntoIterator<Item = WrappedClient>,
-    {
-        iter.into_iter().for_each(|client| self.register_wrapped_client(client))
+impl Registrar for ClientMap {
+    fn bound_redirect<'a>(&self, bound: ClientUrl<'a>) -> Result<BoundClient<'a>, RegistrarError> {
+        let client = match self.clients.get(bound.client_id.as_ref()) {
+            None => return Err(RegistrarError::Unspecified),
+            Some(stored) => stored,
+        };
+
+        // Perform exact matching as motivated in the rfc
+        let registered_url = match bound.redirect_uri {
+            None => client.encoded_client.redirect_uri.clone(),
+            Some(ref url) => {
+                let original = std::iter::once(&client.encoded_client.redirect_uri);
+                let alternatives = client.encoded_client.additional_redirect_uris.iter();
+                if let Some(registered) = original
+                    .chain(alternatives)
+                    .find(|&registered| *registered == *url.as_ref())
+                {
+                    registered.clone()
+                } else {
+                    return Err(RegistrarError::Unspecified);
+                }
+            }
+        };
+
+        Ok(BoundClient {
+            client_id: bound.client_id,
+            redirect_uri: Cow::Owned(registered_url),
+        })
+    }
+
+    /// Always overrides the scope with a default scope.
+    fn negotiate(&self, bound: BoundClient, _scope: Option<Scope>) -> Result<PreGrant, RegistrarError> {
+        let client = self
+            .clients
+            .get(bound.client_id.as_ref())
+            .expect("Bound client appears to not have been constructed with this registrar");
+        Ok(PreGrant {
+            client_id: bound.client_id.into_owned(),
+            redirect_uri: bound.redirect_uri.into_owned(),
+            scope: client.encoded_client.default_scope.clone(),
+        })
+    }
+
+    fn check(&self, client_id: &str, passphrase: Option<&[u8]>) -> Result<(), RegistrarError> {
+        let password_policy = Self::current_policy(&self.password_policy);
+
+        self.clients
+            .get(client_id)
+            .ok_or(RegistrarError::Unspecified)
+            .and_then(|client| {
+                RegisteredClient::new(&client.encoded_client, password_policy).check_authentication(passphrase)
+            })?;
+
+        Ok(())
     }
 }
 
-impl FromIterator<WrappedClient> for ClientMap {
-    fn from_iter<I>(iter: I) -> Self
-    where
-        I: IntoIterator<Item = WrappedClient>,
-    {
-        let mut into = ClientMap::new();
-        into.extend(iter);
-        into
-    }
+#[derive(Debug)]
+pub struct ClientRecord {
+    pub id: String,
+    pub name: String,
+    pub username: String,
+    pub (crate) encoded_client: EncodedClient,
 }
 
-pub struct WrappedClient {
-    pub client_id: String,
-    pub inner: Client,
+impl ClientRecord {
+    fn encoded_client(&self) -> EncodedClient {
+        self.encoded_client.clone()
+    }
 }

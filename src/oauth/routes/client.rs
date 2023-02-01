@@ -57,49 +57,31 @@ async fn post_client(
         _ => return Ok(Redirect::to("/oauth/signin").into_response()),
     };
 
-    let mut client_secret = None;
-
-    let client_id = {
-        let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())
-            .map_err(|_| Error::InternalError)?;
-
-        ClientQuery {
-            user_id: UserId::from_str(user.as_str()).map_err(|_| Error::InternalError)?,
-            id,
-        }
-    };
-
     let client_name = client_form.name;
 
-    let client = match client_form.r#type {
-        ClientType::Confidential => {
-            let secret = nanoid::nanoid!(32);
+    let (client_id, client_secret) = match client_form.r#type {
+        ClientType::Public => db.register_public_client(
+                &client_name, 
+                &client_form.redirect_uri, 
+                "", 
+                &user
+            )
+            .await
+            .map_err(|e| Error::Database { source: (e) })?,
 
-            let client = Client::confidential(
-                &client_id.to_string(),
-                RegisteredUrl::Semantic(client_form.redirect_uri.parse().unwrap()),
-                "".parse().unwrap(),
-                secret.as_bytes(),
-            );
-
-            client_secret = Some(secret);
-
-            client
-        },
-        ClientType::Public => Client::public(
-            &client_id.to_string(),
-            RegisteredUrl::Semantic(client_form.redirect_uri.parse().unwrap()),
-            "".parse().unwrap(),
-        )
+        ClientType::Confidential => db.register_confidential_client(
+                &client_name, 
+                &client_form.redirect_uri, 
+                "", 
+                &user
+            )
+            .await
+            .map_err(|e| Error::Database { source: (e) })?,
     };
-
-    db.register_client(&client_id.to_string(), client, &client_name, &user)
-        .await
-        .map_err(|e| Error::Database { source: (e) })?;
 
     #[derive(Serialize)]
     struct Response {
-        client_id: ClientQuery,
+        client_id: String,
         client_secret: Option<String>,
     }
 

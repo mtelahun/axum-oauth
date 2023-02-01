@@ -1,19 +1,21 @@
 use axum_macros::FromRef;
 use oxide_auth::{
     endpoint::Scope,
-    primitives::registrar::Client,
+    primitives::registrar::{Client, RegisteredUrl},
 };
 use secrecy::{ExposeSecret, Secret};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
-use self::{resource::{
-    client::{AuthClient, ClientName},
-    user::AuthUser,
-}, clientmap::{ClientMap, WrappedClient}};
+use self::{
+    clientmap::{ClientMap, ClientRecord},
+    resource::{
+        client::{AuthClient, ClientName},
+        user::AuthUser,
+    },
+};
+
+use super::models::ClientId;
 
 pub mod clientmap;
 pub mod resource;
@@ -48,12 +50,10 @@ impl Database {
 
     pub async fn get_user(&self, user: &AuthUser) -> Result<UserRecord, StoreError> {
         if self.contains_user(&user.username).await {
-            return Ok(
-                UserRecord {
-                    username: user.username.to_owned(),
-                    password: Secret::from("".to_string()),
-                }
-            )
+            return Ok(UserRecord {
+                username: user.username.to_owned(),
+                password: Secret::from("".to_string()),
+            });
         }
 
         Err(StoreError::DoesNotExist)
@@ -81,24 +81,66 @@ impl Database {
         Ok(result)
     }
 
-    pub async fn register_client(
+    pub async fn register_public_client(
         &mut self,
-        client_id: &str,
-        client: WrappedClient,
         client_name: &str,
+        url: &str,
+        default_scope: &str,
         username: &str,
-    ) -> Result<(), StoreError> {
+    ) -> Result<(String, Option<String>), StoreError> {
+        let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())
+            .map_err(|_| StoreError::InternalError)?;
+        let client = Client::public(
+            id.as_str(),
+            RegisteredUrl::Semantic(url.parse().unwrap()),
+            default_scope.parse().unwrap(),
+        );
         let mut map_lock = self.inner.client_db.write().await;
-        map_lock.register_wrapped_client(client);
+        map_lock.register_client(id.as_str(), client_name, username, client);
 
         // There is currently no easy way to search ClientMap for a record. So, this
-        // function will allways succeed. If the client is already in the ClientMap
-        // its current value will be updated with the new value.
-        Ok(())
+        // function will allways succeed. 
+        Ok((id.to_string(), None))
     }
 
-    pub async fn get_client_name(&self, client: &AuthClient, user: &AuthUser) -> Result<ClientName, StoreError> {
-        Ok(ClientName { inner: "LocalClient".to_string() })
+    pub async fn register_confidential_client(
+        &mut self,
+        client_name: &str,
+        url: &str,
+        default_scope: &str,
+        username: &str,
+    ) -> Result<(String, Option<String>), StoreError> {
+        let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())
+            .map_err(|_| StoreError::InternalError)?;
+        let secret = nanoid::nanoid!(32);
+        let client = Client::confidential(
+            id.as_str(),
+            RegisteredUrl::Semantic(url.parse().unwrap()),
+            default_scope.parse().unwrap(),
+            secret.as_bytes(),
+        );
+        let mut map_lock = self.inner.client_db.write().await;
+        map_lock.register_client(id.as_str(), client_name, username, client);
+
+        // There is currently no easy way to search ClientMap for a record. So, this
+        // function will allways succeed. 
+        Ok((id.to_string(), Some(secret)))
+    }
+
+    pub async fn get_client_name(
+        &self,
+        client: &AuthClient,
+        user: &AuthUser,
+    ) -> Result<ClientName, StoreError> {
+        let map_lock = self.inner.client_db.read().await;
+        let record = map_lock
+            .clients
+            .get(client.id.as_str())
+            .ok_or(StoreError::InternalError)?;
+        
+        Ok(ClientName {
+            inner: record.name.clone(),
+        })
     }
 
     pub fn get_scope(&self, user: &AuthUser, client: &String) -> Option<Scope> {
@@ -146,6 +188,7 @@ impl UserRecord {
 pub enum StoreError {
     DoesNotExist,
     DuplicateRecord,
+    InternalError,
 }
 
 impl std::error::Error for StoreError {
@@ -153,6 +196,7 @@ impl std::error::Error for StoreError {
         match *self {
             StoreError::DoesNotExist => None,
             StoreError::DuplicateRecord => None,
+            StoreError::InternalError => None,
         }
     }
 }
@@ -162,6 +206,7 @@ impl std::fmt::Display for StoreError {
         match *self {
             StoreError::DoesNotExist => write!(f, "the record does not exist"),
             StoreError::DuplicateRecord => write!(f, "attempted to insert duplicate record"),
+            StoreError::InternalError => write!(f, "an unexpected internal error occurred"),
         }
     }
 }
