@@ -67,7 +67,7 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         }
 
         // Attempt to get user and encoded client records
-        let res = self.db.get_client_name(&client_id, &self.user)
+        let res = self.db.get_client_name(&client_id.id.to_string())
             .await
             .map_err(map_err);
         let client = match res {

@@ -5,7 +5,7 @@ use oxide_auth::endpoint::WebRequest;
 #[derive(Template)]
 #[template(path = "index.html")]
 pub struct Index<'a> {
-    pub clients: &'a [crate::oauth::database::resource::client::EncodedClient],
+    pub clients: &'a Vec<String>,
 }
 
 #[derive(Template)]

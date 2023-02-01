@@ -1,6 +1,6 @@
 use super::{Callback, UserForm};
 use crate::oauth::{
-    database::Database,
+    database::{Database, resource::user::AuthUser},
     error::{Error, Result},
     templates::SignIn,
 };
@@ -39,12 +39,15 @@ async fn post_signin(
 ) -> Result<impl IntoResponse> {
     let query = query.as_ref().map(|x| x.as_str());
 
+    tracing::debug!("entered -> post_signin()");
     let authorized = db.verify_password(&user_form.username, &user_form.password)
         .await
         .map_err(|e| Error::Database { source: (e) })?;
-    session.insert("user", user_form.username);
+    let _ = session.insert("user", AuthUser{  username: user_form.username });
 
+    tracing::debug!("    checking authorization");
     if !authorized {
+        tracing::debug!("        NOT authorized");
         Ok((
             StatusCode::UNAUTHORIZED,
             SignIn {
@@ -53,8 +56,10 @@ async fn post_signin(
         )
             .into_response())
     } else if let Some(query) = query {
+        tracing::debug!("    redirect to callback");
         Ok(Redirect::to(query).into_response())
     } else {
+        tracing::debug!("    redirect to /oauth/");
         Ok(Redirect::to("/oauth/").into_response())
     }
 }

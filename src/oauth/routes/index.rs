@@ -2,10 +2,9 @@ use super::session::Session;
 use crate::{
     oauth::{
         database::{
-            resource::client::EncodedClient,
             Database,
         },
-        templates,
+        templates, error::Error,
     },
 };
 use axum::{
@@ -23,18 +22,20 @@ where
     Router::new().route("/", get(index))
 }
 
-pub async fn index(Session { user }: Session, State(db): State<Database>) -> impl IntoResponse {
-    let collection = db
-        .root::<User>()
-        .unwrap()
-        .traverse::<EncodedClient>()
-        .unwrap();
+pub async fn index(Session { user }: Session, State(db): State<Database>) -> Result<impl IntoResponse, Error> {
+    tracing::debug!("enter -> index()");
+    let user_record = db.get_user(&user)
+        .await
+        .map_err(|e| Error::Database { source: e })?;
+    tracing::debug!("user record: {:?}", user_record);
+    let client_ids = user_record.get_authorized_clients();
+    let mut clients = Vec::<String>::new();
+    for id in client_ids {
+        let client_name = db.get_client_name(id)
+            .await
+            .map_err(|e| Error::Database { source: e })?;
+        clients.push(client_name.inner);
+    }
 
-    let keys = collection.keys(&user, 0, 10, false).unwrap();
-    let clients = keys
-        .flat_map(|key| collection.get(&key))
-        .flatten()
-        .collect::<Vec<_>>();
-
-    templates::Index { clients: &clients }.into_response()
+    Ok(templates::Index { clients: &clients }.into_response())
 }

@@ -37,23 +37,23 @@ impl Database {
     pub fn new() -> Database {
         Database {
             inner: Inner {
-                user_db: Arc::new(RwLock::new(HashMap::<String, Secret<String>>::new())),
+                user_db: Arc::new(RwLock::new(HashMap::<String, UserRecord>::new())),
                 client_db: Arc::new(RwLock::new(ClientMap::new())),
             },
         }
     }
 
     pub async fn register_user(&mut self, user: UserRecord) {
+        let u = UserRecord::new(&user.username, &user.password.expose_secret());
         let mut map_lock = self.inner.user_db.write().await;
-        map_lock.insert(user.username, user.password);
+        map_lock.insert(user.username, u);
     }
 
     pub async fn get_user(&self, user: &AuthUser) -> Result<UserRecord, StoreError> {
+        let map_lock = self.inner.user_db.read().await;
         if self.contains_user(&user.username).await {
-            return Ok(UserRecord {
-                username: user.username.to_owned(),
-                password: Secret::from("".to_string()),
-            });
+            let record = map_lock.get(&user.username).ok_or(StoreError::DoesNotExist)?;
+            return Ok(record.clone())
         }
 
         Err(StoreError::DoesNotExist)
@@ -75,8 +75,8 @@ impl Database {
             return Err(StoreError::DoesNotExist);
         }
 
-        let db_password = map_lock.get(username).ok_or(StoreError::DoesNotExist)?;
-        let result = password == db_password.expose_secret();
+        let db = map_lock.get(username).ok_or(StoreError::DoesNotExist)?;
+        let result = password == db.password.expose_secret();
 
         Ok(result)
     }
@@ -95,8 +95,14 @@ impl Database {
             RegisteredUrl::Semantic(url.parse().unwrap()),
             default_scope.parse().unwrap(),
         );
-        let mut map_lock = self.inner.client_db.write().await;
-        map_lock.register_client(id.as_str(), client_name, username, client);
+
+        let mut client_lock = self.inner.client_db.write().await;
+        client_lock.register_client(id.as_str(), client_name, username, client);
+
+        let mut user_lock = self.inner.user_db.write().await;
+        let record = user_lock.get_mut(username)
+            .ok_or(StoreError::DoesNotExist)?;
+        record.add_authorized_client(id.to_string());
 
         // There is currently no easy way to search ClientMap for a record. So, this
         // function will allways succeed. 
@@ -122,6 +128,11 @@ impl Database {
         let mut map_lock = self.inner.client_db.write().await;
         map_lock.register_client(id.as_str(), client_name, username, client);
 
+        let mut user_lock = self.inner.user_db.write().await;
+        let record = user_lock.get_mut(username)
+            .ok_or(StoreError::DoesNotExist)?;
+        record.add_authorized_client(id.to_string());
+
         // There is currently no easy way to search ClientMap for a record. So, this
         // function will allways succeed. 
         Ok((id.to_string(), Some(secret)))
@@ -129,13 +140,12 @@ impl Database {
 
     pub async fn get_client_name(
         &self,
-        client: &AuthClient,
-        user: &AuthUser,
+        client_id: &String,
     ) -> Result<ClientName, StoreError> {
         let map_lock = self.inner.client_db.read().await;
         let record = map_lock
             .clients
-            .get(client.id.as_str())
+            .get(client_id.as_str())
             .ok_or(StoreError::InternalError)?;
         
         Ok(ClientName {
@@ -157,7 +167,7 @@ impl Database {
 
 #[derive(Clone)]
 pub struct Inner {
-    pub(crate) user_db: Arc<RwLock<HashMap<String, Secret<String>>>>,
+    pub(crate) user_db: Arc<RwLock<HashMap<String, UserRecord>>>,
     pub(crate) client_db: Arc<RwLock<ClientMap>>,
 }
 
@@ -165,6 +175,7 @@ pub struct Inner {
 pub struct UserRecord {
     username: String,
     password: Secret<String>,
+    authorized_clients: Vec<String>,
 }
 
 impl UserRecord {
@@ -172,6 +183,7 @@ impl UserRecord {
         Self {
             username: user.to_owned(),
             password: Secret::from(password.to_owned()),
+            authorized_clients: Vec::<String>::new(),
         }
     }
 
@@ -181,6 +193,15 @@ impl UserRecord {
         }
 
         None
+    }
+
+    pub fn add_authorized_client(&mut self, name: String) {
+        self.authorized_clients.push(name);
+    }
+
+    pub fn get_authorized_clients(&self) -> &Vec<String>
+    {
+        &self.authorized_clients
     }
 }
 
