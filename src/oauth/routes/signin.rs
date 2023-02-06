@@ -56,8 +56,13 @@ async fn post_signin(
         )
             .into_response())
     } else if let Some(query) = query {
-        tracing::debug!("    redirect to callback");
-        Ok(Redirect::to(query).into_response())
+        if !query.is_empty() {
+            tracing::debug!("    redirect to callback: {}", query);
+            Ok(Redirect::to(query).into_response())
+        } else {
+            tracing::debug!("    redirect to /oauth/");
+            Ok(Redirect::to("/oauth/").into_response())
+        }
     } else {
         tracing::debug!("    redirect to /oauth/");
         Ok(Redirect::to("/oauth/").into_response())

@@ -12,23 +12,17 @@ use axum::{
     routing::{get},
     Json, RequestPartsExt, Router, TypedHeader,
 };
+use axum_oauth::{build_service, serve};
 use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
-use once_cell::sync::Lazy;
 use oxide_auth::{
     endpoint::{OwnerConsent, Solicitation}, 
     primitives::registrar::RegisteredUrl
 };
-use oxide_auth::primitives::prelude::*;
 use oxide_auth_axum::{OAuthRequest, OAuthResponse, WebError};
-use serde::{Deserialize, Serialize};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 pub mod oauth;
 pub mod state;
-use oauth::database::Database as AuthDB;
-use state::AppState;
-
-use crate::oauth::database::UserRecord;
 
 #[tokio::main]
 async fn main() {
@@ -40,41 +34,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let mut auth_db = AuthDB::new();
-    let user = UserRecord::new("foo", "secret");
-    let username = user.username().unwrap_or("foo".to_string());
-    auth_db.register_user(user).await;
-    let _ = auth_db.register_public_client(
-        "LocalClient",
-        "https://www.thunderclient.com/oauth/callback",
-        "account::read",
-        &username,
-    ).await;
-    let state = oauth::state::State::new(auth_db.clone());
-    let sessions = MemoryStore::new();
-    let state = AppState {
-        sessions,
-        state,
-        database: auth_db,
-    };
-
-    let app = Router::new()
-        .nest("/oauth", crate::oauth::routes::routes())
-        .with_state(state);
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::debug!("listening on {}", addr);
-
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
-}
-
-#[derive(Debug, Deserialize)]
-struct AuthPayload {
-    client_id: String,
-    client_secret: String,
+    let (app, listener) = build_service(None, 3000).await;
+    serve(app, listener).await;
 }
 
 #[derive(Debug)]

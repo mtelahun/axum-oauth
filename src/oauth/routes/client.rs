@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::oauth::{
-    database::Database,
+    database::{Database, resource::user::AuthUser},
     error::{Result, Error},
     models::{ClientId, client::ClientQuery, UserId},
     templates,
@@ -52,10 +52,13 @@ async fn post_client(
     session: ReadableSession,
     Form(client_form): Form<ClientForm>,
 ) -> Result<impl IntoResponse> {
-    let user: String = match session.get("username") {
-        Some(user) => user,
+    tracing::debug!("enter -> post_client()");
+    let auth_user: AuthUser = match session.get("user") {
+        Some(auth_user) => auth_user,
         _ => return Ok(Redirect::to("/oauth/signin").into_response()),
     };
+    let user = auth_user.username;
+    tracing::debug!("    found session for user: {:?}", user);
 
     let client_name = client_form.name;
 
@@ -85,6 +88,7 @@ async fn post_client(
         client_secret: Option<String>,
     }
 
+    tracing::debug!("    return (id, secret): ({:?},{:?})", client_id, client_secret);
     Ok(Json(Response {
         client_id,
         client_secret,

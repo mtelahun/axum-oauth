@@ -11,7 +11,7 @@ mod session {
     use crate::oauth::database::resource::user::AuthUser;
 
     use super::Callback;
-    use axum::{extract::FromRequestParts, http::request::Parts, response::Redirect};
+    use axum::{extract::FromRequestParts, http::request::Parts, response::Redirect, routing::patch_service};
     use axum_sessions::extractors::ReadableSession;
 
     pub struct Session {
@@ -34,14 +34,15 @@ mod session {
             if let Some(user) = session {
                 Ok(Self { user })
             } else {
-                let callback = Callback::from_str(
-                    parts
+                tracing::debug!("parts.uri: {:?}", parts.uri);
+                tracing::debug!("path_and_query: {:?}", parts.uri.path_and_query());
+                let path_and_query = parts
                         .uri
                         .path_and_query()
                         .map(|x| x.as_str())
                         .map(|x| x.trim_start_matches('/'))
-                        .unwrap_or_default(),
-                );
+                        .unwrap_or_default();
+                let callback = Callback::from_str(path_and_query);
 
                 let uri = format!(
                     "/oauth/signin?{}",
