@@ -40,6 +40,17 @@ async fn post_signin(
     let query = query.as_ref().map(|x| x.as_str());
 
     tracing::debug!("entered -> post_signin()");
+    let user_exists = db.contains_user(&user_form.username).await;
+    if !user_exists {
+        tracing::debug!("        user DOES NOT exist");
+        return Ok((
+            StatusCode::UNAUTHORIZED,
+            SignIn {
+                query: query.unwrap_or_default(),
+            },
+        )
+            .into_response())
+    }
     let authorized = db.verify_password(&user_form.username, &user_form.password)
         .await
         .map_err(|e| Error::Database { source: (e) })?;
