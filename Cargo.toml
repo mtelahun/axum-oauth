@@ -21,7 +21,7 @@ once_cell = "1.17.0"
 oxide-auth = "0.5"
 oxide-auth-async = "0.1.0"
 oxide-auth-axum = "0.3.0"
-reqwest = { version = "0.11.14", features = ["cookies"] }
+reqwest = { version = "0.11.14", features = ["cookies", "json"] }
 secrecy = "0.8.0"
 #oxide-auth = { git = "https://github.com/mtelahun/oxide-auth", rev="e7e3d27" }
 #oxide-auth-axum = { git = "https://github.com/mtelahun/oxide-auth", rev="305be9d" }

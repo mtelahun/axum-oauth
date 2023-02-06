@@ -76,6 +76,29 @@ pub struct TestState {
     pub api_client: reqwest::Client,
 }
 
+impl TestState {
+    pub async fn signin(&self, username: &str, password: &str) {
+        let form = serde_json::json!({
+            "username": username,
+            "password": password,
+        });
+
+        let response = self.api_client
+            .post(&format!("{}/oauth/signin", &self.app_address))
+            .form(&form)
+            .send()
+            .await
+            .expect("request to server api failed");
+        
+        assert_eq!(
+            response.status().as_u16(),
+            303,
+            "correct credentials result in 303 redirect to oauth root uri",
+        );
+        assert_is_redirect_to(&response, "/oauth/");
+    }
+}
+
 // Ensure that the `tracing` stack is only initialized once
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "test=debug,tower_http=debug".to_string();
@@ -88,28 +111,6 @@ static TRACING: Lazy<()> = Lazy::new(|| {
         init_subscriber(subscriber);
     }
 });
-
-// pub fn dummy_client() -> dev::Server {
-//     HttpServer::new(move || {
-//         let config = ClientConfig {
-//             client_id: "LocalClient".into(),
-//             String: Option::from("test".to_string()),
-//             protected_url: "http://localhost:8020/".into(),
-//             token_url: "http://localhost:8020/token".into(),
-//             refresh_url: "http://localhost:8020/refresh".into(),
-//             redirect_uri: "http://localhost:8021/endpoint".into(),
-//         };
-
-//         App::new()
-//             .app_data(Client::new(config))
-//             .route("/endpoint", web::get().to(endpoint_impl))
-//             .route("/refresh", web::post().to(refresh))
-//             .route("/", web::get().to(get_with_token))
-//     })
-//     .bind("localhost:8021")
-//     .expect("Failed to start dummy client")
-//     .run()
-// }
 
 pub async fn spawn_app() -> TestState {
     // Initialize tracing stack
