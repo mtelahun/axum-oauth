@@ -20,7 +20,7 @@ pub struct SignUp<'a> {
     pub query: &'a str,
 }
 
-#[derive(Template)]
+#[derive(Template, Debug)]
 #[template(path = "authorize.html")]
 pub struct Authorize<'a> {
     pub query: String,
@@ -40,6 +40,7 @@ impl<'a> Authorize<'a> {
         username: &'a str,
         client_name: &'a str,
     ) -> Self {
+        tracing::debug!("in Authorize::new()\nusername: {:?}, client name: {:?}\nRequest: {:?}", username, client_name, req);
         let query = req.query().unwrap();
         let grant = solicitation.pre_grant();
         let state = solicitation.state();

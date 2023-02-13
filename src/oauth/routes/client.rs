@@ -57,7 +57,7 @@ async fn post_client(
         Some(auth_user) => auth_user,
         _ => return Ok(Redirect::to("/oauth/signin").into_response()),
     };
-    let user = auth_user.username;
+    let user = auth_user.user_id;
     tracing::debug!("    found session for user: {:?}", user);
 
     let client_name = client_form.name;

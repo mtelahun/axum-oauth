@@ -19,7 +19,7 @@ pub struct ClientName {
 //     type Key = ClientQuery;
 // }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct AuthClient {
     pub user_id: UserId,
     pub id: ClientId,

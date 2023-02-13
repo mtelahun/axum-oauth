@@ -3,6 +3,8 @@ use std::{collections::HashMap, borrow::Cow};
 use once_cell::sync::Lazy;
 use oxide_auth::{primitives::registrar::{Argon2, Client, EncodedClient, PasswordPolicy, BoundClient, RegistrarError, ClientUrl, RegisteredClient}, endpoint::{Scope, PreGrant, Registrar}};
 
+use crate::oauth::models::UserId;
+
 static DEFAULT_PASSWORD_POLICY: Lazy<Argon2> = Lazy::new(Argon2::default);
 
 #[derive(Default)]
@@ -18,14 +20,15 @@ impl ClientMap {
     }
 
     /// Insert or update the client record.
-    pub fn register_client(&mut self, id: &str, name: &str, user: &str, client: Client) {
+    pub fn register_client(&mut self, id: &str, name: &str, user_id: UserId, client: Client) {
         let id = id.to_owned();
         let password_policy = Self::current_policy(&self.password_policy);
         let record = ClientRecord {
             id: id.clone(),
+            user_id,
             name: name.to_owned(),
-            username: user.to_owned(),
             encoded_client: client.encode(password_policy),
+            scopes: Vec::<crate::oauth::rhodos_scopes::Scopes>::new(),
         };
         self.clients
             .insert(id, record);
@@ -106,8 +109,9 @@ impl Registrar for ClientMap {
 pub struct ClientRecord {
     pub id: String,
     pub name: String,
-    pub username: String,
+    pub user_id: UserId,
     pub (crate) encoded_client: EncodedClient,
+    pub scopes: Vec<crate::oauth::rhodos_scopes::Scopes>
 }
 
 impl ClientRecord {

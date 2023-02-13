@@ -20,6 +20,7 @@ pub struct Solicitor {
 
 impl Solicitor {
     pub fn new(db: Database, user: AuthUser) -> Self {
+        tracing::debug!("db: XXXX, user: {:?}", user);
         Self { db, user }
     }
 }
@@ -31,11 +32,21 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         req: &mut OAuthRequest,
         solicitation: Solicitation<'_>,
     ) -> OwnerConsent<<OAuthRequest as WebRequest>::Response> {
+        tracing::debug!("in check_consent()");
         fn map_err<E: std::error::Error>(
             err: E,
         ) -> OwnerConsent<<OAuthRequest as WebRequest>::Response> {
             OwnerConsent::Error(WebError::InternalError(Some(err.to_string())))
         }
+
+        let pre_g = solicitation.pre_grant();
+        tracing::debug!("PreGrant: {:?}", pre_g);
+
+        let cid = pre_g.client_id.clone();
+        tracing::debug!("Client ID: {:?}", cid);
+
+        let cid_parsed = cid.parse::<AuthClient>();
+        tracing::debug!("Parsed Client ID: {:?}", cid_parsed.unwrap());
 
         let client_id = match solicitation
             .pre_grant()
@@ -72,7 +83,7 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
             Ok(name) => name,
             Err(err) => return err,
         };
-        let res = self.db.get_user(&self.user)
+        let res = self.db.get_user_by_id(&self.user)
             .await
             .map_err(map_err);
         let user = match res {

@@ -35,12 +35,11 @@ async fn post_signup(
     query: Option<Query<Callback<'_>>>,
     Form(user): Form<UserForm>,
 ) -> Result<impl IntoResponse> {
-    if db.contains_user(&user.username).await {
+    if db.contains_user_name(&user.username).await {
         return Ok(Redirect::to("signin"))
     }
 
-    let record = UserRecord::new(&user.username, &user.password);
-    db.register_user(record).await;
+    db.register_user(&user.username, Secret::from(user.password)).await;
 
     Ok(Redirect::to("/"))
 }

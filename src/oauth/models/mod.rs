@@ -19,6 +19,7 @@ impl<const L: usize> Id<L> {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, InvalidLengthError> {
+        tracing::debug!("from_bytes(): {:?}", bytes);
         Ok(Self {
             inner: bytes.try_into().map_err(|_| InvalidLengthError {
                 expected: L,

@@ -1,10 +1,22 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::helpers::spawn_app;
+use crate::helpers::{spawn_app, assert_is_redirect_to};
+#[derive(Debug, Deserialize)]
+struct ClientResponse {
+    client_id: String,
+    client_secret: String,
+}
 
+#[derive(Debug, Serialize)]
+struct AuthorizationQuery {
+    client_id: String,
+    client_secret: String,
+    redirect_uri: String,
+    response_type: String,
+}
 
 #[tokio::test]
-pub async fn register_client() {
+pub async fn register_client_get_form() {
     // Arrange
     let state = spawn_app().await;
     let client = state.api_client;
@@ -101,12 +113,6 @@ pub async fn register_client_form_errors() {
     }
 }
 
-#[derive(Deserialize)]
-struct ClientResponse {
-    client_id: String,
-    client_secret: String,
-}
-
 #[tokio::test]
 pub async fn happy_path_register_client_confidential() {
     // Arrange
@@ -148,6 +154,88 @@ pub async fn happy_path_register_client_confidential() {
         res.client_secret.len(),
         32,
         "The client_secret field contains a response of the right length for nanoid output"
+    );
+   
+}
+
+#[tokio::test]
+pub async fn happy_path_client_authorization_flow() {
+    // Arrange
+    let dummy_client = reqwest::Client::new();
+    let state = spawn_app().await;
+    let form = serde_json::json!({
+        "name": "foo client",
+        "redirect_uri": "http://localhost:3001/endpoint",
+        "type": "confidential",
+    });
+    state.signin("foo", "secret").await;
+
+    // Register Client
+    // Act -1
+    let response = state.api_client
+        .post(&format!("{}/oauth/client", &state.app_address))
+        .form(&form)
+        .send()
+        .await
+        .expect("request to server api failed");
+
+    // Assert -1
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "client registration form processed successfully"
+    );
+    let res = response
+        .json::<ClientResponse>()
+        .await
+        .expect("Failed to get response body");
+    assert!(
+        !res.client_id.is_empty(),
+        "The client_id field of the response is NOT empty"
+    );
+    assert!(
+        !res.client_secret.is_empty(),
+        "The client_secret field of the response is NOT empty"
+    );
+     assert_eq!(
+        res.client_secret.len(),
+        32,
+        "The client_secret field contains a response of the right length for nanoid output"
+    );
+
+    // Get Code
+    // Arrange -2
+    let code_verifier = pkce::code_verifier(128);
+    let code_challenge = pkce::code_challenge(&code_verifier);
+    let query = serde_json::json!({
+        "response_type": "code",
+        "redirect_uri": "http://localhost:3001/endpoint",
+        "client_id": res.client_id,
+        "scope": "account:read account:write",
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+        "state": "12345",
+    });
+
+    // Act -2
+    tracing::debug!("GET /oauth/authorize");
+    tracing::debug!("Query: {:?}", query);
+    let response = state.api_client
+        .get(format!("{}/oauth/authorize", state.app_address))
+        .basic_auth(res.client_id, Some(res.client_secret))
+        .query(&query)
+        .send()
+        .await
+        .expect("failed to get response from api client");
+    assert_is_redirect_to(&response, "http://localhost:3000/consent", 302);
+    let body = response
+        .text()
+        .await
+        .expect("unable to decode response from dummy client");
+    assert_eq!(
+        body,
+        "placeholder....",
+        "placeholder"
     );
    
 }

@@ -15,7 +15,7 @@ use self::{
     },
 };
 
-use super::models::ClientId;
+use super::models::{ClientId, UserId};
 
 pub mod clientmap;
 pub mod resource;
@@ -37,31 +37,52 @@ impl Database {
     pub fn new() -> Database {
         Database {
             inner: Inner {
-                user_db: Arc::new(RwLock::new(HashMap::<String, UserRecord>::new())),
+                user_db: Arc::new(RwLock::new(HashMap::<UserId, UserRecord>::new())),
                 client_db: Arc::new(RwLock::new(ClientMap::new())),
             },
         }
     }
 
-    pub async fn register_user(&mut self, user: UserRecord) {
-        let u = UserRecord::new(&user.username, &user.password.expose_secret());
+    pub async fn register_user(&mut self, username: &str, password: Secret<String>) -> UserId {
+        let id = UserId::new();
+        let u = UserRecord::new(id.clone(), username, &password.expose_secret());
         let mut map_lock = self.inner.user_db.write().await;
-        map_lock.insert(user.username, u);
+        map_lock.insert(id, u);
+
+        id
     }
 
-    pub async fn get_user(&self, user: &AuthUser) -> Result<UserRecord, StoreError> {
+    pub async fn get_user_by_id(&self, user: &AuthUser) -> Result<UserRecord, StoreError> {
         let map_lock = self.inner.user_db.read().await;
-        if self.contains_user(&user.username).await {
-            let record = map_lock.get(&user.username).ok_or(StoreError::DoesNotExist)?;
+        if self.contains_user_id(&user.user_id).await {
+            let record = map_lock.get(&user.user_id).ok_or(StoreError::DoesNotExist)?;
             return Ok(record.clone())
         }
 
         Err(StoreError::DoesNotExist)
     }
 
-    pub async fn contains_user(&self, username: &String) -> bool {
+    pub async fn get_user_by_name(&self, username: &str) -> Result<UserRecord, StoreError> {
         let map_lock = self.inner.user_db.read().await;
-        map_lock.contains_key(username)
+        for (_, v) in &*map_lock {
+            if v.username == username {
+                return Ok(v.clone())
+            }
+        }
+
+        Err(StoreError::DoesNotExist)
+    }
+
+    pub async fn contains_user_id(&self, id: &UserId) -> bool {
+        let map_lock = self.inner.user_db.read().await;
+        map_lock.contains_key(id)
+    }
+
+    pub async fn contains_user_name(&self, username: &str) -> bool {
+        match self.get_user_by_name(username).await {
+            Ok(record) => record.username == username,
+            Err(_) => false,
+        }
     }
 
     // XXX - Doesn't really belong in a storage interface. It's just expeditious.
@@ -71,11 +92,7 @@ impl Database {
         password: &String,
     ) -> Result<bool, StoreError> {
         let map_lock = self.inner.user_db.read().await;
-        if !map_lock.contains_key(username) {
-            return Err(StoreError::DoesNotExist);
-        }
-
-        let db = map_lock.get(username).ok_or(StoreError::DoesNotExist)?;
+        let db = self.get_user_by_name(username).await?;
         let result = password == db.password.expose_secret();
 
         Ok(result)
@@ -86,27 +103,28 @@ impl Database {
         client_name: &str,
         url: &str,
         default_scope: &str,
-        username: &str,
+        user_id: &UserId,
     ) -> Result<(String, Option<String>), StoreError> {
-        let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())
-            .map_err(|_| StoreError::InternalError)?;
+        let id = ClientId::new();
+        let key = user_id.to_string() + id.to_string().as_str();
         let client = Client::public(
             id.as_str(),
             RegisteredUrl::Semantic(url.parse().unwrap()),
             default_scope.parse().unwrap(),
         );
+        tracing::debug!("Registering public client: {:?}", client);
 
         let mut client_lock = self.inner.client_db.write().await;
-        client_lock.register_client(id.as_str(), client_name, username, client);
+        client_lock.register_client(&key, client_name, *user_id, client);
 
         let mut user_lock = self.inner.user_db.write().await;
-        let record = user_lock.get_mut(username)
+        let record = user_lock.get_mut(user_id)
             .ok_or(StoreError::DoesNotExist)?;
         record.add_authorized_client(id.to_string());
 
-        // There is currently no easy way to search ClientMap for a record. So, this
+        // There is currently no easy way to search ClientMap for a record. So, thisscopescopescope
         // function will allways succeed. 
-        Ok((id.to_string(), None))
+        Ok((key, None))
     }
 
     pub async fn register_confidential_client(
@@ -114,7 +132,7 @@ impl Database {
         client_name: &str,
         url: &str,
         default_scope: &str,
-        username: &str,
+        user_id: &UserId,
     ) -> Result<(String, Option<String>), StoreError> {
         let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())
             .map_err(|_| StoreError::InternalError)?;
@@ -125,17 +143,19 @@ impl Database {
             default_scope.parse().unwrap(),
             secret.as_bytes(),
         );
+        tracing::debug!("Registering confidential client: {:?}", &client);
+        let key = user_id.to_string() + id.to_string().as_str();
         let mut map_lock = self.inner.client_db.write().await;
-        map_lock.register_client(id.as_str(), client_name, username, client);
+        map_lock.register_client(&key, client_name, *user_id, client);
 
         let mut user_lock = self.inner.user_db.write().await;
-        let record = user_lock.get_mut(username)
+        let record = user_lock.get_mut(user_id)
             .ok_or(StoreError::DoesNotExist)?;
         record.add_authorized_client(id.to_string());
 
         // There is currently no easy way to search ClientMap for a record. So, this
         // function will allways succeed. 
-        Ok((id.to_string(), Some(secret)))
+        Ok((key, Some(secret)))
     }
 
     pub async fn get_client_name(
@@ -167,20 +187,22 @@ impl Database {
 
 #[derive(Clone)]
 pub struct Inner {
-    pub(crate) user_db: Arc<RwLock<HashMap<String, UserRecord>>>,
+    pub(crate) user_db: Arc<RwLock<HashMap<UserId, UserRecord>>>,
     pub(crate) client_db: Arc<RwLock<ClientMap>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct UserRecord {
+    id: UserId,
     username: String,
     password: Secret<String>,
     authorized_clients: Vec<String>,
 }
 
 impl UserRecord {
-    pub fn new(user: &str, password: &str) -> UserRecord {
+    pub fn new(id: UserId, user: &str, password: &str) -> UserRecord {
         Self {
+            id,
             username: user.to_owned(),
             password: Secret::from(password.to_owned()),
             authorized_clients: Vec::<String>::new(),
@@ -190,6 +212,14 @@ impl UserRecord {
     pub fn username(&self) -> Option<String> {
         if !self.username.is_empty() {
             return Some(self.username.clone());
+        }
+
+        None
+    }
+
+    pub fn id(&self) -> Option<UserId> {
+        if !self.username.is_empty() {
+            return Some(self.id)
         }
 
         None

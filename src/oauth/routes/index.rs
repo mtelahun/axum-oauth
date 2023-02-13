@@ -24,7 +24,7 @@ where
 
 pub async fn index(Session { user }: Session, State(db): State<Database>) -> Result<impl IntoResponse, Error> {
     tracing::debug!("enter -> index()");
-    let user_record = db.get_user(&user)
+    let user_record = db.get_user_by_id(&user)
         .await
         .map_err(|e| Error::Database { source: e })?;
     tracing::debug!("user record: {:?}", user_record);

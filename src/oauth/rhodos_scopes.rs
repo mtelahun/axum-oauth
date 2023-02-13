@@ -18,7 +18,8 @@ impl Resource for Account {
     const FOLLOW: &'static str = "account:follow";
 }
 
-enum Scopes {
+#[derive(Debug)]
+pub enum Scopes {
     AccountRead,
     AccountWrite,
     AccountFollow,

@@ -1,5 +1,5 @@
 use crate::oauth::{
-    database::{Database, resource::user::{AuthorizationQuery, Authorization}},
+    database::Database,
     routes::session::Session,
     solicitor::Solicitor,
     Consent,
@@ -11,7 +11,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use axum_macros::debug_handler;
 use oxide_auth::{
     endpoint::{OwnerConsent, PreGrant, QueryParameter, Solicitation},
     frontends::simple::endpoint::FnSolicitor,
@@ -36,6 +35,8 @@ async fn get_authorize(
     Session { user }: Session,
     request: OAuthRequest,
 ) -> Result<impl IntoResponse, Error> {
+    tracing::debug!("in get_authorize()");
+    tracing::debug!("OAuth Request:\n{:?}", request);
     state
         .endpoint()
         .await

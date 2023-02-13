@@ -1,11 +1,18 @@
+use std::{collections::HashMap, future::Future};
+
+use axum::{
+    routing::{get, post},
+    Router, Server, extract::{Query, State}, response::{Redirect, Html},
+};
 use once_cell::sync::Lazy;
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 use tokio::task::JoinHandle;
 use tracing::subscriber::set_global_default;
 use tracing::Subscriber;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Registry};
+
+use crate::oauth_client_helper::{ClientConfig, Client, Error as OAuthClientError};
 
 pub fn get_subscriber<Sink>(
     name: String,
@@ -42,33 +49,6 @@ where
     let current_span = tracing::Span::current();
     tokio::task::spawn_blocking(move || current_span.in_scope(f))
 }
-/// Send+Sync client implementation.
-// #[derive(Clone)]
-// pub struct Client {
-//     config: Config,
-//     state: Arc<RwLock<State>>,
-// }
-
-#[derive(Clone)]
-pub struct Config {
-    /// The protected page.
-    pub protected_url: String,
-
-    /// Url to post to in order to get a token.
-    pub token_url: String,
-
-    /// Url to post to in order to refresh the token.
-    pub refresh_url: String,
-
-    /// The id that the client should use.
-    pub client_id: String,
-
-    /// The redirect_uri to use.
-    pub redirect_uri: String,
-
-    /// The client_secret to use.
-    pub client_secret: Option<String>,
-}
 
 pub struct TestState {
     pub app_address: String,
@@ -83,19 +63,20 @@ impl TestState {
             "password": password,
         });
 
-        let response = self.api_client
+        let response = self
+            .api_client
             .post(&format!("{}/oauth/signin", &self.app_address))
             .form(&form)
             .send()
             .await
             .expect("request to server api failed");
-        
+
         assert_eq!(
             response.status().as_u16(),
             303,
             "correct credentials result in 303 redirect to oauth root uri",
         );
-        assert_is_redirect_to(&response, "/oauth/");
+        assert_is_redirect_to(&response, "/oauth/", 303);
     }
 }
 
@@ -116,12 +97,12 @@ pub async fn spawn_app() -> TestState {
     // Initialize tracing stack
     Lazy::force(&TRACING);
 
-
-    let (router, listener) =
-        axum_oauth::build_service(Some("0.0.0.0:0".to_string()), 3000).await;
+    // Launch app
+    let (router, listener) = axum_oauth::build_service(Some("0.0.0.0:0".to_string()), 3000).await;
     let port = listener.local_addr().unwrap().port();
-
-    let _ = tokio::spawn(axum_oauth::serve(router, listener));
+    tokio::spawn(axum_oauth::serve(router, listener));
+    
+    tokio::spawn(dummy_client());
 
     let reqwest_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -139,11 +120,11 @@ pub async fn spawn_app() -> TestState {
     res
 }
 
-pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
+pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str, status_code: u16) {
     assert_eq!(
         response.status().as_u16(),
-        303,
-        "received https status code: 303 Redirect"
+        status_code,
+        "received https status code: {} Redirect", status_code
     );
     assert_eq!(
         response.headers().get("Location").unwrap(),
@@ -151,4 +132,68 @@ pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
         "redirect location is: {}",
         location
     )
+}
+
+pub async fn dummy_client() -> impl Future {
+    let config = ClientConfig {
+        protected_url: "http://localhost:3000/oauth".into(),
+        token_url: "http://localhost:3000/oauth/token".into(),
+        refresh_url: "http://localhost:3000/oauth/refresh".into(),
+        redirect_uri: "http://localhost:3001/oauth/endpoint".into(),
+        client_id: "LocalClient".into(),
+        client_secret: Some("test".into()),
+    };
+    let client = Client::new(config);
+    let app = Router::new()
+        .route("/endpoint", get(endpoint))
+        .route("/refresh", post(refresh))
+        .route("/", get(get_with_token))
+        .with_state(client);
+        
+    tracing::debug!("Starting dummy client");
+    Server::bind(&"127.0.0.1:3001".parse().unwrap())
+        .serve(app.into_make_service())
+}
+
+async fn endpoint(
+    query: Query<HashMap<String, String>>,
+    State(state): State<Client>,
+) -> Result<Redirect, OAuthClientError> {
+    if let Some(_) = query.get("error") {
+        return Err(OAuthClientError::MissingToken)
+    }
+
+    let code = match query.get("code") {
+        None => return Err(OAuthClientError::MissingToken),
+        Some(code) => code.clone(),
+    };
+    state.authorize(&code).await?;
+
+    Ok(Redirect::to("/"))
+}
+
+async fn refresh(State(state): State<Client>) -> Result<Redirect, OAuthClientError> {
+    state.refresh().await?;
+
+    Ok(Redirect::to("/"))
+}
+
+async fn get_with_token(State(state): State<Client>) -> Result<Html<String>, OAuthClientError> {
+    let protected_page = state.retrieve_protected_page().await?;
+
+    let display_page = format!(
+        "<html><style>
+            aside{{overflow: auto; word-break: keep-all; white-space: nowrap}}
+            main{{text-align: center}}
+            main>aside,main>article{{margin: auto; text-align: left; border: 1px solid black; width: 50%}}
+        </style>
+        <main>
+        Used token <aside style>{}</aside> to access
+        <a href=\"http://localhost:8020/\">http://localhost:8020/</a>.
+        Its contents are:
+        <article>{}</article>
+        <form action=\"refresh\" method=\"post\"><button>Refresh token</button></form>
+        </main></html>", state.as_html().await, protected_page);
+
+    Ok(Html::from(display_page))
 }

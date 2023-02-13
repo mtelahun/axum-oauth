@@ -5,7 +5,8 @@ use axum::Router;
 pub mod oauth;
 pub mod state;
 
-use oauth::database::{Database as AuthDB, UserRecord};
+use oauth::{database::{Database as AuthDB, UserRecord}, models::UserId};
+use secrecy::Secret;
 use state::AppState;
 
 pub async fn build_service(
@@ -40,14 +41,12 @@ pub async fn serve(app: Router, listener: TcpListener) {
 async fn get_router() -> Router {
 
     let mut auth_db = AuthDB::new();
-    let user = UserRecord::new("foo", "secret");
-    let username = user.username().unwrap_or("foo".to_string());
-    auth_db.register_user(user).await;
+    let user_id = auth_db.register_user("foo", Secret::from("secret".to_string())).await;
     let _ = auth_db.register_public_client(
         "LocalClient",
         "https://www.thunderclient.com/oauth/callback",
         "account::read",
-        &username,
+        &user_id,
     ).await;
     let state = oauth::state::State::new(auth_db.clone());
     let sessions = MemoryStore::new();
