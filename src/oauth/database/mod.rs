@@ -7,6 +7,8 @@ use secrecy::{ExposeSecret, Secret};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
+use crate::oauth::models::UserClientId;
+
 use self::{
     clientmap::{ClientMap, ClientRecord},
     resource::{
@@ -120,7 +122,7 @@ impl Database {
         let mut user_lock = self.inner.user_db.write().await;
         let record = user_lock.get_mut(user_id)
             .ok_or(StoreError::DoesNotExist)?;
-        record.add_authorized_client(id.to_string());
+        record.add_authorized_client(key.parse::<UserClientId>().unwrap());
 
         // There is currently no easy way to search ClientMap for a record. So, thisscopescopescope
         // function will allways succeed. 
@@ -151,7 +153,7 @@ impl Database {
         let mut user_lock = self.inner.user_db.write().await;
         let record = user_lock.get_mut(user_id)
             .ok_or(StoreError::DoesNotExist)?;
-        record.add_authorized_client(id.to_string());
+        record.add_authorized_client(key.parse::<UserClientId>().unwrap());
 
         // There is currently no easy way to search ClientMap for a record. So, this
         // function will allways succeed. 
@@ -160,7 +162,7 @@ impl Database {
 
     pub async fn get_client_name(
         &self,
-        client_id: &String,
+        client_id: UserClientId,
     ) -> Result<ClientName, StoreError> {
         let map_lock = self.inner.client_db.read().await;
         let record = map_lock
@@ -173,14 +175,14 @@ impl Database {
         })
     }
 
-    pub fn get_scope(&self, user: &AuthUser, client: &String) -> Option<Scope> {
+    pub fn get_scope(&self, user: &AuthUser, client: UserClientId) -> Option<Scope> {
         match "account::read".parse() {
             Ok(scope) => Some(scope),
             Err(_) => None,
         }
     }
 
-    pub fn update_client_scope(&self, scope: &Scope) {
+    pub fn update_client_scope(&self, client: UserClientId, scope: &Scope) {
         ()
     }
 }
@@ -196,7 +198,7 @@ pub struct UserRecord {
     id: UserId,
     username: String,
     password: Secret<String>,
-    authorized_clients: Vec<String>,
+    authorized_clients: Vec<UserClientId>,
 }
 
 impl UserRecord {
@@ -205,7 +207,7 @@ impl UserRecord {
             id,
             username: user.to_owned(),
             password: Secret::from(password.to_owned()),
-            authorized_clients: Vec::<String>::new(),
+            authorized_clients: Vec::<UserClientId>::new(),
         }
     }
 
@@ -225,11 +227,11 @@ impl UserRecord {
         None
     }
 
-    pub fn add_authorized_client(&mut self, name: String) {
-        self.authorized_clients.push(name);
+    pub fn add_authorized_client(&mut self, client_id: UserClientId) {
+        self.authorized_clients.push(client_id);
     }
 
-    pub fn get_authorized_clients(&self) -> &Vec<String>
+    pub fn get_authorized_clients(&self) -> &Vec<UserClientId>
     {
         &self.authorized_clients
     }

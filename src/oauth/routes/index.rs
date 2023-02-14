@@ -31,7 +31,7 @@ pub async fn index(Session { user }: Session, State(db): State<Database>) -> Res
     let client_ids = user_record.get_authorized_clients();
     let mut clients = Vec::<String>::new();
     for id in client_ids {
-        let client_name = db.get_client_name(id)
+        let client_name = db.get_client_name(*id)
             .await
             .map_err(|e| Error::Database { source: e })?;
         clients.push(client_name.inner);

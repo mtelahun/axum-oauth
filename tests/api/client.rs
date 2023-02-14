@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::helpers::{spawn_app, assert_is_redirect_to};
@@ -203,7 +204,7 @@ pub async fn happy_path_client_authorization_flow() {
         "The client_secret field contains a response of the right length for nanoid output"
     );
 
-    // Get Code
+    // Ask owner consent
     // Arrange -2
     let code_verifier = pkce::code_verifier(128);
     let code_challenge = pkce::code_challenge(&code_verifier);
@@ -211,7 +212,7 @@ pub async fn happy_path_client_authorization_flow() {
         "response_type": "code",
         "redirect_uri": "http://localhost:3001/endpoint",
         "client_id": res.client_id,
-        "scope": "account:read account:write",
+        "scope": "account:read account:write account:follow",
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "state": "12345",
@@ -222,20 +223,66 @@ pub async fn happy_path_client_authorization_flow() {
     tracing::debug!("Query: {:?}", query);
     let response = state.api_client
         .get(format!("{}/oauth/authorize", state.app_address))
-        .basic_auth(res.client_id, Some(res.client_secret))
+        .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
         .query(&query)
         .send()
         .await
         .expect("failed to get response from api client");
-    assert_is_redirect_to(&response, "http://localhost:3000/consent", 302);
+
+    // Assert -2
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "The authorization endpoint returns successfully"
+    );
     let body = response
         .text()
         .await
         .expect("unable to decode response from dummy client");
-    assert_eq!(
-        body,
-        "placeholder....",
-        "placeholder"
+    tracing::debug!("consent page:\n{}", body);
+    assert!(
+        body.contains("<h1>Authorize foo client</h1>"),
+        "The authorization endpoint returned a consent page that shows the client name"
     );
-   
+    assert!(
+        body.contains("<h4>foo client wants access to your <em>foo</em> account"),
+        "The authorization endpoint returned a consent page that shows the target resource"
+    );
+    assert!(
+        body.contains("account:read"),
+        "The authorization endpoint returned a consent page that shows the requested (read) permissions"
+    );
+    assert!(
+        body.contains("account:write"),
+        "The authorization endpoint returned a consent page that shows the requested (write) permissions"
+    );
+    assert!(
+        body.contains("account:follow"),
+        "The authorization endpoint returned a consent page that shows the requested (follow) permissions"
+    );
+
+    // Owner gives consent
+    // Arrange -3
+    let re_action = Regex::new("formaction=\"(.*)\"").unwrap();
+    let caps = re_action.captures(&body).unwrap();
+    let allow_path = caps
+        .get(1)
+        .map_or("/", |m| m.as_str());
+        
+    let allow_path = urlencoding::decode(allow_path).expect("failed to decode formaction");
+    let allow_path = html_escape::decode_html_entities(&allow_path);
+    tracing::debug!("RE path: {}", allow_path);
+
+    // Act -3
+    tracing::debug!("uri: {}", format!("{}/oauth/{}", state.app_address, allow_path));
+    let response = state.api_client
+        .post(format!("{}/oauth/{}", state.app_address, allow_path))
+        .basic_auth(res.client_id, Some(res.client_secret))
+        .send()
+        .await
+        .expect("failed to get response from api client");
+    assert_is_redirect_to(&response, 302, "http://localhost:3001/endpoint?code=", true);
+
+    let body = response.text().await.expect("Unable to decode response body");
+    tracing::debug!("Response: {}", body);
 }

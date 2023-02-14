@@ -6,7 +6,7 @@ use crate::oauth::{
         },
         Database,
     },
-    templates::Authorize, error::Error,
+    templates::Authorize, error::Error, models::UserClientId,
 };
 use askama::Template;
 use oxide_auth::endpoint::{OwnerConsent, Solicitation, WebRequest};
@@ -33,6 +33,7 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         solicitation: Solicitation<'_>,
     ) -> OwnerConsent<<OAuthRequest as WebRequest>::Response> {
         tracing::debug!("in check_consent()");
+        tracing::debug!("Request: {:?}", req);
         fn map_err<E: std::error::Error>(
             err: E,
         ) -> OwnerConsent<<OAuthRequest as WebRequest>::Response> {
@@ -41,12 +42,6 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
 
         let pre_g = solicitation.pre_grant();
         tracing::debug!("PreGrant: {:?}", pre_g);
-
-        let cid = pre_g.client_id.clone();
-        tracing::debug!("Client ID: {:?}", cid);
-
-        let cid_parsed = cid.parse::<AuthClient>();
-        tracing::debug!("Parsed Client ID: {:?}", cid_parsed.unwrap());
 
         let client_id = match solicitation
             .pre_grant()
@@ -59,12 +54,25 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         };
 
         // Is there already an authorization (user:client pair) ?
-        let previous_scope = self.db.get_scope(&self.user, &client_id.id.to_string());
+        // let client_key_id = (self.user.user_id.to_string() + client_id.id.to_string().as_str())
+        //     .parse::<UserClientId>()
+        //     .unwrap();
+        let user_client_id = match client_id.
+            to_user_client_id()
+            .map_err(map_err)
+        {
+            Ok(id) => id,
+            Err(err) => return err,            
+        };
+
+        let previous_scope = self.db.get_scope(&self.user, user_client_id);
         let authorization = match previous_scope {
             Some(scope) => Some(Authorization { scope }),
             _ => None,
         };
 
+        tracing::debug!("Current scope of client: {:?}", authorization);
+        tracing::debug!("Requested grant scope: {:?}", solicitation.pre_grant().scope);
         match authorization {
             // Yes, there is and it's scope >= requested scope. Return authorized consent.
             Some(Authorization { scope }) if scope >= solicitation.pre_grant().scope => {
@@ -76,7 +84,7 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         }
 
         // Attempt to get user and encoded client records
-        let res = self.db.get_client_name(&client_id.id.to_string())
+        let res = self.db.get_client_name(user_client_id)
             .await
             .map_err(map_err);
         let client = match res {

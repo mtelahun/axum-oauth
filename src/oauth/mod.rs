@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 pub mod database;
 pub mod endpoint;
 pub mod error;
@@ -9,7 +11,7 @@ pub mod solicitor;
 pub mod state;
 pub mod templates;
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "consent", rename_all = "lowercase")]
 pub enum Consent {
     Allow,

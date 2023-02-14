@@ -3,7 +3,7 @@ use std::{collections::HashMap, borrow::Cow};
 use once_cell::sync::Lazy;
 use oxide_auth::{primitives::registrar::{Argon2, Client, EncodedClient, PasswordPolicy, BoundClient, RegistrarError, ClientUrl, RegisteredClient}, endpoint::{Scope, PreGrant, Registrar}};
 
-use crate::oauth::models::UserId;
+use crate::oauth::{models::UserId, rhodos_scopes};
 
 static DEFAULT_PASSWORD_POLICY: Lazy<Argon2> = Lazy::new(Argon2::default);
 
@@ -61,14 +61,12 @@ impl Registrar for ClientMap {
             Some(ref url) => {
                 let original = std::iter::once(&client.encoded_client.redirect_uri);
                 let alternatives = client.encoded_client.additional_redirect_uris.iter();
-                if let Some(registered) = original
+
+                original
                     .chain(alternatives)
                     .find(|&registered| *registered == *url.as_ref())
-                {
-                    registered.clone()
-                } else {
-                    return Err(RegistrarError::Unspecified);
-                }
+                    .cloned()
+                    .ok_or(RegistrarError::Unspecified)?
             }
         };
 
@@ -79,15 +77,28 @@ impl Registrar for ClientMap {
     }
 
     /// Always overrides the scope with a default scope.
-    fn negotiate(&self, bound: BoundClient, _scope: Option<Scope>) -> Result<PreGrant, RegistrarError> {
+    fn negotiate(&self, bound: BoundClient, scope: Option<Scope>) -> Result<PreGrant, RegistrarError> {
         let client = self
             .clients
             .get(bound.client_id.as_ref())
             .expect("Bound client appears to not have been constructed with this registrar");
+
+        let scope = scope
+            .and_then(|scope| {
+                scope
+                    .iter()
+                    .filter(|scope| rhodos_scopes::SCOPES.contains(scope))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .parse()
+                    .ok()
+            })
+            .unwrap_or(client.encoded_client.default_scope.clone());
+
         Ok(PreGrant {
             client_id: bound.client_id.into_owned(),
             redirect_uri: bound.redirect_uri.into_owned(),
-            scope: client.encoded_client.default_scope.clone(),
+            scope,
         })
     }
 

@@ -107,5 +107,5 @@ async fn happy_path_signin_form() {
         303,
         "correct credentials result in 303 redirect to oauth root uri",
     );
-    assert_is_redirect_to(&response, "/oauth/", 303);
+    assert_is_redirect_to(&response, 303, "/oauth/", false);
 }

@@ -39,7 +39,7 @@ pub struct AuthorizationQuery {
     pub client: AuthClient,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Authorization {
     pub scope: oxide_auth::primitives::scope::Scope,
 }

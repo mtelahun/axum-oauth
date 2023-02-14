@@ -3,7 +3,7 @@ use crate::oauth::{
     routes::session::Session,
     solicitor::Solicitor,
     Consent,
-    error::Error,
+    error::Error, models::{ClientId, UserClientId},
 };
 use axum::{
     extract::{FromRef, Query, State},
@@ -55,6 +55,9 @@ async fn post_authorize(
     Session { user }: Session,
     request: OAuthRequest,
 ) -> Result<impl IntoResponse, Error> {
+    tracing::debug!("in post_authorize()");
+    tracing::debug!("request:\n{:?}", request);
+    tracing::debug!("consent:\n{:?}", consent);
     state
         .endpoint()
         .await
@@ -65,9 +68,9 @@ async fn post_authorize(
                         client_id, scope, ..
                     } = solicitation.pre_grant().clone();
 
-                    let previous_scope = db.get_scope(&user, &client_id);
+                    let previous_scope = db.get_scope(&user, client_id.parse::<UserClientId>().unwrap());
                     if previous_scope.is_none() || previous_scope.unwrap() < scope {
-                        db.update_client_scope(&scope);
+                        db.update_client_scope(client_id.parse::<UserClientId>().unwrap(), &scope);
                     }
 
                     OwnerConsent::Authorized(user.to_string())

@@ -76,7 +76,7 @@ impl TestState {
             303,
             "correct credentials result in 303 redirect to oauth root uri",
         );
-        assert_is_redirect_to(&response, "/oauth/", 303);
+        assert_is_redirect_to(&response, 303, "/oauth/", false);
     }
 }
 
@@ -120,18 +120,32 @@ pub async fn spawn_app() -> TestState {
     res
 }
 
-pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str, status_code: u16) {
+pub fn assert_is_redirect_to(response: &reqwest::Response, status_code: u16, location: &str, location_is_partial: bool) {
     assert_eq!(
         response.status().as_u16(),
         status_code,
         "received https status code: {} Redirect", status_code
     );
-    assert_eq!(
-        response.headers().get("Location").unwrap(),
-        location,
-        "redirect location is: {}",
-        location
-    )
+    if !location_is_partial {
+        assert_eq!(
+            response.headers().get("Location").unwrap(),
+            location,
+            "redirect location is: {}",
+            location
+        )
+    } else {
+        let loc_header = response
+                .headers()
+                .get("Location")
+                .unwrap()
+                .to_str()
+                .expect("failed to convert header to str");
+
+        assert!(
+            loc_header.contains(location),
+            "partial match to initial part of redirect location"
+        )
+    }
 }
 
 pub async fn dummy_client() -> impl Future {
