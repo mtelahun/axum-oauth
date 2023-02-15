@@ -2,9 +2,10 @@ use std::{collections::HashMap, future::Future};
 
 use axum::{
     routing::{get, post},
-    Router, Server, extract::{Query, State}, response::{Redirect, Html},
+    Router, Server, extract::{Query, State}, response::{Redirect, Html}, Json,
 };
 use once_cell::sync::Lazy;
+use serde::Serialize;
 use tokio::task::JoinHandle;
 use tracing::subscriber::set_global_default;
 use tracing::Subscriber;
@@ -102,8 +103,6 @@ pub async fn spawn_app() -> TestState {
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(axum_oauth::serve(router, listener));
     
-    tokio::spawn(dummy_client());
-
     let reqwest_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .cookie_store(true)
@@ -169,10 +168,14 @@ pub async fn dummy_client() -> impl Future {
         .serve(app.into_make_service())
 }
 
+#[derive(Debug, Serialize)]
+struct AuthorizationCode {
+    code: String,
+}
 async fn endpoint(
     query: Query<HashMap<String, String>>,
     State(state): State<Client>,
-) -> Result<Redirect, OAuthClientError> {
+) -> Result<Json<AuthorizationCode>, OAuthClientError> {
     if let Some(_) = query.get("error") {
         return Err(OAuthClientError::MissingToken)
     }
@@ -181,9 +184,9 @@ async fn endpoint(
         None => return Err(OAuthClientError::MissingToken),
         Some(code) => code.clone(),
     };
-    state.authorize(&code).await?;
+    // state.authorize(&code).await?;
 
-    Ok(Redirect::to("/"))
+    Ok(Json(AuthorizationCode { code }))
 }
 
 async fn refresh(State(state): State<Client>) -> Result<Redirect, OAuthClientError> {

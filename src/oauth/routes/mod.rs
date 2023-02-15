@@ -26,6 +26,7 @@ mod session {
         type Rejection = Redirect;
 
         async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+            tracing::debug!("Middleware: Session: parts: {:?}", parts);
             let session = ReadableSession::from_request_parts(parts, state)
                 .await
                 .ok()
@@ -34,8 +35,6 @@ mod session {
             if let Some(user) = session {
                 Ok(Self { user })
             } else {
-                tracing::debug!("parts.uri: {:?}", parts.uri);
-                tracing::debug!("path_and_query: {:?}", parts.uri.path_and_query());
                 let path_and_query = parts
                         .uri
                         .path_and_query()

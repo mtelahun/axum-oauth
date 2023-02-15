@@ -1,7 +1,11 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::helpers::{spawn_app, assert_is_redirect_to};
+use crate::{
+    helpers::{spawn_app, assert_is_redirect_to},
+    oauth_client_helper::Token,
+};
+
 #[derive(Debug, Deserialize)]
 struct ClientResponse {
     client_id: String,
@@ -162,7 +166,6 @@ pub async fn happy_path_register_client_confidential() {
 #[tokio::test]
 pub async fn happy_path_client_authorization_flow() {
     // Arrange
-    let dummy_client = reqwest::Client::new();
     let state = spawn_app().await;
     let form = serde_json::json!({
         "name": "foo client",
@@ -211,7 +214,7 @@ pub async fn happy_path_client_authorization_flow() {
     let query = serde_json::json!({
         "response_type": "code",
         "redirect_uri": "http://localhost:3001/endpoint",
-        "client_id": res.client_id,
+        "client_id": res.client_id.clone(),
         "scope": "account:read account:write account:follow",
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
@@ -219,8 +222,7 @@ pub async fn happy_path_client_authorization_flow() {
     });
 
     // Act -2
-    tracing::debug!("GET /oauth/authorize");
-    tracing::debug!("Query: {:?}", query);
+    tracing::debug!("Test::GET /oauth/authorize?{:?}", query);
     let response = state.api_client
         .get(format!("{}/oauth/authorize", state.app_address))
         .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
@@ -277,12 +279,152 @@ pub async fn happy_path_client_authorization_flow() {
     tracing::debug!("uri: {}", format!("{}/oauth/{}", state.app_address, allow_path));
     let response = state.api_client
         .post(format!("{}/oauth/{}", state.app_address, allow_path))
-        .basic_auth(res.client_id, Some(res.client_secret))
+        .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
         .send()
         .await
         .expect("failed to get response from api client");
+
+    // Assert -3
     assert_is_redirect_to(&response, 302, "http://localhost:3001/endpoint?code=", true);
 
-    let body = response.text().await.expect("Unable to decode response body");
-    tracing::debug!("Response: {}", body);
+    // Get access token
+    // Arrange -4
+    let location = response.headers().get("Location").unwrap().to_str().expect("failed to get redirect location");
+    tracing::debug!("Client redirect: {}", location);
+    let re_code = Regex::new("\\?code=(.*)\\&").unwrap();
+    let caps = re_code.captures(&location).unwrap();
+    let code = caps
+        .get(1)
+        .map_or("X", |m| m.as_str());
+    let code = urlencoding::decode(code).expect("failed to decode authorization code");
+    tracing::debug!("Extracted code: {}", code);
+
+    let cv = String::from_utf8_lossy(&code_verifier);
+    let params = vec!(
+        ("grant_type", "authorization_code"),
+        ("redirect_uri", "http://localhost:3001/endpoint"),
+        ("code", &code),
+        ("code_verifier", &cv),
+    );
+
+    // Act -4
+    let response = state.api_client
+        .post(format!("{}/oauth/token", state.app_address))
+        .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
+        .form(&params)
+        .send()
+        .await
+        .expect("failed to get response from api client");
+
+    // Assert -4
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "Request for access token returns successfully"
+    );
+    let token = response.text().await.expect("failed to get response body");
+    tracing::debug!("Token Response: {:?}", token);
+    let token: Token = serde_json::from_str(token.as_str()).unwrap();
+    tracing::debug!("Token Serialized: {:?}", token);
+    assert_eq!(
+        token.token_type,
+        "bearer",
+        "Token is a Bearer token"
+    );
+    for s in ["account:read", "account:write", "account:follow"] {
+        assert!(
+            token.scope.contains(s),
+            "Token scope includes {}", s
+        );
+    }
+    assert!(
+        !token.access_token.is_none(),
+        "Access token contains a value"
+    );
+    assert!(
+        !token.refresh_token.is_none(),
+        "Refresh token contains a value"
+    );
+    assert!(
+        token.error.is_none(),
+        "Error value of token response is empty"
+    );
+
+    // Refresh the token
+    // Arrange -5
+    let old_token = token.access_token.clone().unwrap();
+    let refresh_token = token.refresh_token.clone().unwrap();
+    let params = vec!(
+        ("grant_type", "refresh_token"),
+        ("refresh_token", &refresh_token),
+        ("scope", "account:read account:write account:follow"),
+    );
+
+    // Act -5
+    let response = state.api_client
+        .post(format!("{}/oauth/token", state.app_address))
+        .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
+        .form(&params)
+        .send()
+        .await
+        .expect("failed to get response from api client");
+
+    // Assert -5
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "Request for access token returns successfully"
+    );
+    let token = response.text().await.expect("failed to get response body");
+    tracing::debug!("Token Response: {:?}", token);
+    let token: Token = serde_json::from_str(token.as_str()).unwrap();
+    tracing::debug!("Token Serialized: {:?}", token);
+    assert_eq!(
+        token.token_type,
+        "bearer",
+        "Token is a Bearer token"
+    );
+    for s in ["account:read", "account:write", "account:follow"] {
+        assert!(
+            token.scope.contains(s),
+            "Token scope includes {}", s
+        );
+    }
+    let new_token = token.access_token.clone().unwrap();
+    assert!(
+        !token.access_token.is_none() && new_token != old_token,
+        "New access token is different from the previous token"
+    );
+    assert!(
+        !token.refresh_token.is_none(),
+        "Refresh token contains a value"
+    );
+    assert!(
+        token.error.is_none(),
+        "Error value of token response is empty"
+    );
+
+    // Use the access token
+    // Arrange - 6
+    let token = new_token;
+
+    // Act - 6
+    let response = state.api_client
+        .get(&format!("{}/oauth/whoami", &state.app_address))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("request to client api failed");
+
+    // Assert - 6
+    assert_eq!(
+        response.status().as_u16(),
+        200,
+        "Access to protected resource succeeded"
+    );
+    let body = response.text().await.unwrap();
+    assert!(
+        body.contains(":foo"),
+        "Confirm access to protected resource"
+    );
 }

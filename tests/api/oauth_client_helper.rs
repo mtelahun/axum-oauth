@@ -71,23 +71,23 @@ struct ClientState {
     pub until: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct TokenMap {
-    token_type: String,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Token {
+    pub token_type: String,
 
-    scope: String,
-
-    #[serde(skip_serializing_if="Option::is_none")]
-    access_token: Option<String>,
+    pub scope: String,
 
     #[serde(skip_serializing_if="Option::is_none")]
-    refresh_token: Option<String>,
+    pub access_token: Option<String>,
 
     #[serde(skip_serializing_if="Option::is_none")]
-    expires_in: Option<i64>,
+    pub refresh_token: Option<String>,
 
     #[serde(skip_serializing_if="Option::is_none")]
-    error: Option<String>,
+    pub expires_in: Option<i64>,
+
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub error: Option<String>,
 }
 
 impl Client {
@@ -129,7 +129,7 @@ impl Client {
             .execute(access_token_request)
             .await
             .map_err(|_| Error::AuthorizationFailed)?;
-        let token_map: TokenMap = parse_token_response(token_response).await?;
+        let token_map: Token = parse_token_response(token_response).await?;
 
         if let Some(err) = token_map.error {
             return Err(Error::Response(err));
@@ -203,7 +203,7 @@ impl Client {
             .execute(access_token_request)
             .await
             .map_err(|_| Error::RefreshFailed)?;
-        let token_map: TokenMap = parse_token_response(token_response).await?;
+        let token_map: Token = parse_token_response(token_response).await?;
 
         if token_map.error.is_some() || !token_map.access_token.is_some() {
             return Err(Error::MissingToken);
@@ -226,7 +226,7 @@ impl Client {
     }
 }
 
-async fn parse_token_response(response: Response) -> Result<TokenMap, serde_json::Error> {
+async fn parse_token_response(response: Response) -> Result<Token, serde_json::Error> {
     let token = response.text().await.unwrap();
     serde_json::from_str(&token)
 }

@@ -14,7 +14,6 @@ async-trait = "0.1.61"
 axum = { version = "0.6.1", features = ["headers"] }
 axum-macros = "0.3.1"
 axum-sessions = "0.4.1"
-html-escape = "0.2.13"
 json = "0.12.4"
 jsonwebtoken = "8.2.0"
 nanoid = "0.4.0"
@@ -23,8 +22,6 @@ oxide-auth = "0.5"
 oxide-auth-async = "0.1.0"
 oxide-auth-axum = "0.3.0"
 pkce = "0.1.1"
-regex = "1.7.1"
-reqwest = { version = "0.11.14", features = ["cookies", "json"] }
 secrecy = "0.8.0"
 #oxide-auth = { git = "https://github.com/mtelahun/oxide-auth", rev="e7e3d27" }
 #oxide-auth-axum = { git = "https://github.com/mtelahun/oxide-auth", rev="305be9d" }
@@ -38,4 +35,9 @@ tracing-bunyan-formatter = "0.3.6"
 tracing-log = "0.1.3"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 url = "2.3.1"
+
+[dev-dependencies]
+html-escape = "0.2.13"
+regex = "1.7.1"
+reqwest = { version = "0.11.14", features = ["cookies", "json"] }
 urlencoding = "2.1.2"

@@ -21,6 +21,7 @@ where
     type Rejection = Result<OAuthResponse, WebError>;
 
     async fn from_request_parts(parts: &mut Parts, state: &State) -> Result<Self, Self::Rejection> {
+        tracing::debug!("Middleware: Grant<Scope>: parts: {:?}", parts);
         let req = OAuthResource::from_request_parts(parts, state)
             .await
             .map_err(Err)?;

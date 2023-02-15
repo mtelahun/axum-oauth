@@ -90,10 +90,12 @@ async fn token(
     State(state): State<super::super::state::State>,
     request: OAuthRequest,
 ) -> Result<OAuthResponse, WebError> {
+    tracing::debug!("Endpoint: token(), Request:\n{:?}", request);
     let grant_type = request
         .body()
         .and_then(|x| x.unique_value("grant_type"))
         .unwrap_or_default();
+    tracing::debug!("Grant Type: {:?}", grant_type);
 
     match &*grant_type {
         "refresh_token" => refresh(State(state), request).await,

@@ -35,6 +35,5 @@ pub async fn oauth_index_redirect_to_sign_in() {
         .expect("request to client api failed");
 
     // Assert
-    assert_is_redirect_to(&response, 303, "/oauth/signin?callback=", false);
-    
+    assert_is_redirect_to(&response, 303, "/oauth/signin?callback=", false);  
 }
