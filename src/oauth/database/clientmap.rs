@@ -1,7 +1,13 @@
-use std::{collections::HashMap, borrow::Cow};
+use std::{borrow::Cow, collections::HashMap};
 
 use once_cell::sync::Lazy;
-use oxide_auth::{primitives::registrar::{Argon2, Client, EncodedClient, PasswordPolicy, BoundClient, RegistrarError, ClientUrl, RegisteredClient}, endpoint::{Scope, PreGrant, Registrar}};
+use oxide_auth::{
+    endpoint::{PreGrant, Registrar, Scope},
+    primitives::registrar::{
+        Argon2, BoundClient, Client, ClientUrl, EncodedClient, PasswordPolicy, RegisteredClient,
+        RegistrarError,
+    },
+};
 
 use crate::oauth::{models::UserId, rhodos_scopes};
 
@@ -9,7 +15,7 @@ static DEFAULT_PASSWORD_POLICY: Lazy<Argon2> = Lazy::new(Argon2::default);
 
 #[derive(Default)]
 pub struct ClientMap {
-    pub (crate) clients: HashMap<String, ClientRecord>,
+    pub(crate) clients: HashMap<String, ClientRecord>,
     password_policy: Option<Box<dyn PasswordPolicy>>,
 }
 
@@ -30,8 +36,7 @@ impl ClientMap {
             encoded_client: client.encode(password_policy),
             scopes: Vec::<crate::oauth::rhodos_scopes::Scopes>::new(),
         };
-        self.clients
-            .insert(id, record);
+        self.clients.insert(id, record);
     }
 
     /// Change how passwords are encoded while stored.
@@ -40,7 +45,7 @@ impl ClientMap {
     }
 
     // This is not an instance method because it needs to borrow the box but register needs &mut
-    fn current_policy<'a>(policy: &'a Option<Box<dyn PasswordPolicy>>) -> &'a dyn PasswordPolicy {
+    fn current_policy(policy: &Option<Box<dyn PasswordPolicy>>) -> &dyn PasswordPolicy {
         policy
             .as_ref()
             .map(|boxed| &**boxed)
@@ -77,7 +82,11 @@ impl Registrar for ClientMap {
     }
 
     /// Always overrides the scope with a default scope.
-    fn negotiate(&self, bound: BoundClient, scope: Option<Scope>) -> Result<PreGrant, RegistrarError> {
+    fn negotiate(
+        &self,
+        bound: BoundClient,
+        scope: Option<Scope>,
+    ) -> Result<PreGrant, RegistrarError> {
         let client = self
             .clients
             .get(bound.client_id.as_ref())
@@ -109,7 +118,8 @@ impl Registrar for ClientMap {
             .get(client_id)
             .ok_or(RegistrarError::Unspecified)
             .and_then(|client| {
-                RegisteredClient::new(&client.encoded_client, password_policy).check_authentication(passphrase)
+                RegisteredClient::new(&client.encoded_client, password_policy)
+                    .check_authentication(passphrase)
             })?;
 
         Ok(())
@@ -121,11 +131,12 @@ pub struct ClientRecord {
     pub id: String,
     pub name: String,
     pub user_id: UserId,
-    pub (crate) encoded_client: EncodedClient,
-    pub scopes: Vec<crate::oauth::rhodos_scopes::Scopes>
+    pub(crate) encoded_client: EncodedClient,
+    pub scopes: Vec<crate::oauth::rhodos_scopes::Scopes>,
 }
 
 impl ClientRecord {
+    #[allow(dead_code)]
     fn encoded_client(&self) -> EncodedClient {
         self.encoded_client.clone()
     }

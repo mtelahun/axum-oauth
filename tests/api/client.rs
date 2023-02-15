@@ -1,10 +1,7 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    helpers::{spawn_app, assert_is_redirect_to},
-    oauth_client_helper::Token,
-};
+use crate::helpers::{assert_is_redirect_to, spawn_app, Token};
 
 #[derive(Debug, Deserialize)]
 struct ClientResponse {
@@ -39,10 +36,7 @@ pub async fn register_client_get_form() {
         200,
         "client registration form loads successfully"
     );
-    let text = response
-        .text()
-        .await
-        .expect("Failed to get response body");
+    let text = response.text().await.expect("Failed to get response body");
     assert!(
         text.contains(r#"<form method="post">
       <input type="text" name="name" placeholder="Name" aria-label="Name" required>
@@ -56,7 +50,6 @@ pub async fn register_client_get_form() {
     </form>"#),
         "Response body contains client registration form"
     )
-    
 }
 
 #[tokio::test]
@@ -70,14 +63,14 @@ pub async fn register_client_form_errors() {
                 "redirect_uri": "https://foo/authorized",
                 "type": "confidential",
             }),
-            "missing client name"
+            "missing client name",
         ),
         (
             serde_json::json!({
                 "name": "foo client",
                 "type": "confidential",
             }),
-            "missing redirect URI"
+            "missing redirect URI",
         ),
         (
             serde_json::json!({
@@ -85,19 +78,16 @@ pub async fn register_client_form_errors() {
                 "redirect_uri": "https://foo/authorized",
                 "type": "wrong_type",
             }),
-            "wrong client type"
+            "wrong client type",
         ),
         (
             serde_json::json!({
                 "name": "foo client",
                 "redirect_uri": "https://foo/authorized",
             }),
-            "missing client type"
+            "missing client type",
         ),
-        (
-            serde_json::json!({}),
-            "all fields missing"
-        ),
+        (serde_json::json!({}), "all fields missing"),
     ];
 
     for (case, msg) in invalid_cases {
@@ -113,7 +103,8 @@ pub async fn register_client_form_errors() {
         assert_eq!(
             response.status().as_u16(),
             400,
-            "{}: returns client error status", msg
+            "{}: returns client error status",
+            msg
         );
     }
 }
@@ -130,7 +121,8 @@ pub async fn happy_path_register_client_confidential() {
     state.signin("foo", "secret").await;
 
     // Act
-    let response = state.api_client
+    let response = state
+        .api_client
         .post(&format!("{}/oauth/client", &state.app_address))
         .form(&form)
         .send()
@@ -155,12 +147,11 @@ pub async fn happy_path_register_client_confidential() {
         !res.client_secret.is_empty(),
         "The client_secret field of the response is NOT empty"
     );
-     assert_eq!(
+    assert_eq!(
         res.client_secret.len(),
         32,
         "The client_secret field contains a response of the right length for nanoid output"
     );
-   
 }
 
 #[tokio::test]
@@ -176,7 +167,8 @@ pub async fn happy_path_client_authorization_flow() {
 
     // Register Client
     // Act -1
-    let response = state.api_client
+    let response = state
+        .api_client
         .post(&format!("{}/oauth/client", &state.app_address))
         .form(&form)
         .send()
@@ -201,7 +193,7 @@ pub async fn happy_path_client_authorization_flow() {
         !res.client_secret.is_empty(),
         "The client_secret field of the response is NOT empty"
     );
-     assert_eq!(
+    assert_eq!(
         res.client_secret.len(),
         32,
         "The client_secret field contains a response of the right length for nanoid output"
@@ -223,7 +215,8 @@ pub async fn happy_path_client_authorization_flow() {
 
     // Act -2
     tracing::debug!("Test::GET /oauth/authorize?{:?}", query);
-    let response = state.api_client
+    let response = state
+        .api_client
         .get(format!("{}/oauth/authorize", state.app_address))
         .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
         .query(&query)
@@ -267,17 +260,19 @@ pub async fn happy_path_client_authorization_flow() {
     // Arrange -3
     let re_action = Regex::new("formaction=\"(.*)\"").unwrap();
     let caps = re_action.captures(&body).unwrap();
-    let allow_path = caps
-        .get(1)
-        .map_or("/", |m| m.as_str());
-        
+    let allow_path = caps.get(1).map_or("/", |m| m.as_str());
+
     let allow_path = urlencoding::decode(allow_path).expect("failed to decode formaction");
     let allow_path = html_escape::decode_html_entities(&allow_path);
     tracing::debug!("RE path: {}", allow_path);
 
     // Act -3
-    tracing::debug!("uri: {}", format!("{}/oauth/{}", state.app_address, allow_path));
-    let response = state.api_client
+    tracing::debug!(
+        "uri: {}",
+        format!("{}/oauth/{}", state.app_address, allow_path)
+    );
+    let response = state
+        .api_client
         .post(format!("{}/oauth/{}", state.app_address, allow_path))
         .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
         .send()
@@ -289,26 +284,30 @@ pub async fn happy_path_client_authorization_flow() {
 
     // Get access token
     // Arrange -4
-    let location = response.headers().get("Location").unwrap().to_str().expect("failed to get redirect location");
+    let location = response
+        .headers()
+        .get("Location")
+        .unwrap()
+        .to_str()
+        .expect("failed to get redirect location");
     tracing::debug!("Client redirect: {}", location);
     let re_code = Regex::new("\\?code=(.*)\\&").unwrap();
     let caps = re_code.captures(&location).unwrap();
-    let code = caps
-        .get(1)
-        .map_or("X", |m| m.as_str());
+    let code = caps.get(1).map_or("X", |m| m.as_str());
     let code = urlencoding::decode(code).expect("failed to decode authorization code");
     tracing::debug!("Extracted code: {}", code);
 
     let cv = String::from_utf8_lossy(&code_verifier);
-    let params = vec!(
+    let params = vec![
         ("grant_type", "authorization_code"),
         ("redirect_uri", "http://localhost:3001/endpoint"),
         ("code", &code),
         ("code_verifier", &cv),
-    );
+    ];
 
     // Act -4
-    let response = state.api_client
+    let response = state
+        .api_client
         .post(format!("{}/oauth/token", state.app_address))
         .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
         .form(&params)
@@ -326,16 +325,9 @@ pub async fn happy_path_client_authorization_flow() {
     tracing::debug!("Token Response: {:?}", token);
     let token: Token = serde_json::from_str(token.as_str()).unwrap();
     tracing::debug!("Token Serialized: {:?}", token);
-    assert_eq!(
-        token.token_type,
-        "bearer",
-        "Token is a Bearer token"
-    );
+    assert_eq!(token.token_type, "bearer", "Token is a Bearer token");
     for s in ["account:read", "account:write", "account:follow"] {
-        assert!(
-            token.scope.contains(s),
-            "Token scope includes {}", s
-        );
+        assert!(token.scope.contains(s), "Token scope includes {}", s);
     }
     assert!(
         !token.access_token.is_none(),
@@ -354,14 +346,15 @@ pub async fn happy_path_client_authorization_flow() {
     // Arrange -5
     let old_token = token.access_token.clone().unwrap();
     let refresh_token = token.refresh_token.clone().unwrap();
-    let params = vec!(
+    let params = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", &refresh_token),
         ("scope", "account:read account:write account:follow"),
-    );
+    ];
 
     // Act -5
-    let response = state.api_client
+    let response = state
+        .api_client
         .post(format!("{}/oauth/token", state.app_address))
         .basic_auth(res.client_id.clone(), Some(res.client_secret.clone()))
         .form(&params)
@@ -379,16 +372,9 @@ pub async fn happy_path_client_authorization_flow() {
     tracing::debug!("Token Response: {:?}", token);
     let token: Token = serde_json::from_str(token.as_str()).unwrap();
     tracing::debug!("Token Serialized: {:?}", token);
-    assert_eq!(
-        token.token_type,
-        "bearer",
-        "Token is a Bearer token"
-    );
+    assert_eq!(token.token_type, "bearer", "Token is a Bearer token");
     for s in ["account:read", "account:write", "account:follow"] {
-        assert!(
-            token.scope.contains(s),
-            "Token scope includes {}", s
-        );
+        assert!(token.scope.contains(s), "Token scope includes {}", s);
     }
     let new_token = token.access_token.clone().unwrap();
     assert!(
@@ -409,7 +395,8 @@ pub async fn happy_path_client_authorization_flow() {
     let token = new_token;
 
     // Act - 6
-    let response = state.api_client
+    let response = state
+        .api_client
         .get(&format!("{}/oauth/whoami", &state.app_address))
         .bearer_auth(token)
         .send()

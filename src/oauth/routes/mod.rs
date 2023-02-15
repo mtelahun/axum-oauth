@@ -1,7 +1,4 @@
-use crate::oauth::{
-    database::Database,
-    primitives::scopes::Grant,
-};
+use crate::oauth::{database::Database, primitives::scopes::Grant};
 use axum::{extract::FromRef, response::IntoResponse, routing::get, Json, Router};
 use axum_sessions::{async_session::MemoryStore, PersistencePolicy, SameSite, SessionLayer};
 use serde::{Deserialize, Serialize};
@@ -11,7 +8,7 @@ mod session {
     use crate::oauth::database::resource::user::AuthUser;
 
     use super::Callback;
-    use axum::{extract::FromRequestParts, http::request::Parts, response::Redirect, routing::patch_service};
+    use axum::{extract::FromRequestParts, http::request::Parts, response::Redirect};
     use axum_sessions::extractors::ReadableSession;
 
     pub struct Session {
@@ -36,16 +33,16 @@ mod session {
                 Ok(Self { user })
             } else {
                 let path_and_query = parts
-                        .uri
-                        .path_and_query()
-                        .map(|x| x.as_str())
-                        .map(|x| x.trim_start_matches('/'))
-                        .unwrap_or_default();
+                    .uri
+                    .path_and_query()
+                    .map(|x| x.as_str())
+                    .map(|x| x.trim_start_matches('/'))
+                    .unwrap_or_default();
                 let callback = Callback::from_str(path_and_query);
 
                 let uri = format!(
                     "/oauth/signin?{}",
-                    serde_urlencoded::to_string(&callback).unwrap()
+                    serde_urlencoded::to_string(callback).unwrap()
                 );
 
                 Err(Redirect::to(&uri))

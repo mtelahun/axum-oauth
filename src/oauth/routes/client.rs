@@ -1,9 +1,6 @@
-use std::str::FromStr;
-
 use crate::oauth::{
-    database::{Database, resource::user::AuthUser},
-    error::{Result, Error},
-    models::{ClientId, client::ClientQuery, UserId},
+    database::{resource::user::AuthUser, Database},
+    error::{Error, Result},
     templates,
 };
 
@@ -14,7 +11,6 @@ use axum::{
     Router,
 };
 use axum_sessions::extractors::ReadableSession;
-use oxide_auth::primitives::registrar::{Client, RegisteredUrl};
 use serde::{Deserialize, Serialize};
 // use tf_database::{
 //     primitives::Key,
@@ -63,21 +59,13 @@ async fn post_client(
     let client_name = client_form.name;
 
     let (client_id, client_secret) = match client_form.r#type {
-        ClientType::Public => db.register_public_client(
-                &client_name, 
-                &client_form.redirect_uri, 
-                "", 
-                &user
-            )
+        ClientType::Public => db
+            .register_public_client(&client_name, &client_form.redirect_uri, "", &user)
             .await
             .map_err(|e| Error::Database { source: (e) })?,
 
-        ClientType::Confidential => db.register_confidential_client(
-                &client_name, 
-                &client_form.redirect_uri, 
-                "", 
-                &user
-            )
+        ClientType::Confidential => db
+            .register_confidential_client(&client_name, &client_form.redirect_uri, "", &user)
             .await
             .map_err(|e| Error::Database { source: (e) })?,
     };
@@ -88,7 +76,11 @@ async fn post_client(
         client_secret: Option<String>,
     }
 
-    tracing::debug!("    return (id, secret): ({:?},{:?})", client_id, client_secret);
+    tracing::debug!(
+        "    return (id, secret): ({:?},{:?})",
+        client_id,
+        client_secret
+    );
     Ok(Json(Response {
         client_id,
         client_secret,

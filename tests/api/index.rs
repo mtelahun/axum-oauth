@@ -1,4 +1,4 @@
-use crate::helpers::{spawn_app, assert_is_redirect_to};
+use crate::helpers::{assert_is_redirect_to, spawn_app};
 
 #[tokio::test]
 pub async fn index_not_found() {
@@ -35,5 +35,5 @@ pub async fn oauth_index_redirect_to_sign_in() {
         .expect("request to client api failed");
 
     // Assert
-    assert_is_redirect_to(&response, 303, "/oauth/signin?callback=", false);  
+    assert_is_redirect_to(&response, 303, "/oauth/signin?callback=", false);
 }

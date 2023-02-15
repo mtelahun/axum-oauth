@@ -1,6 +1,6 @@
 use super::{Callback, UserForm};
 use crate::oauth::{
-    database::{Database, resource::user::AuthUser},
+    database::{resource::user::AuthUser, Database},
     error::{Error, Result},
     templates::SignIn,
 };
@@ -40,8 +40,7 @@ async fn post_signin(
     let query = query.as_ref().map(|x| x.as_str());
 
     tracing::debug!("entered -> post_signin()");
-    let user_record = db.get_user_by_name(&user_form.username)
-        .await;
+    let user_record = db.get_user_by_name(&user_form.username).await;
     if user_record.is_err() {
         tracing::debug!("        user DOES NOT exist");
         return Ok((
@@ -50,13 +49,20 @@ async fn post_signin(
                 query: query.unwrap_or_default(),
             },
         )
-            .into_response())
+            .into_response());
     }
     let user_record = user_record.unwrap();
-    let authorized = db.verify_password(&user_form.username, &user_form.password)
+    let authorized = db
+        .verify_password(&user_form.username, &user_form.password)
         .await
         .map_err(|e| Error::Database { source: (e) })?;
-    let _ = session.insert("user", AuthUser{  user_id: user_record.id().unwrap(), username: user_form.username });
+    let _ = session.insert(
+        "user",
+        AuthUser {
+            user_id: user_record.id().unwrap(),
+            username: user_form.username,
+        },
+    );
 
     tracing::debug!("    checking authorization");
     if !authorized {

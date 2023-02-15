@@ -1,4 +1,4 @@
-use crate::helpers::{spawn_app, assert_is_redirect_to};
+use crate::helpers::{assert_is_redirect_to, spawn_app};
 
 #[tokio::test]
 async fn signin_form_fields_problem() {
@@ -10,18 +10,15 @@ async fn signin_form_fields_problem() {
             serde_json::json!({
                 "password": "secret",
             }),
-            "no username"
+            "no username",
         ),
         (
             serde_json::json!({
                 "username": "foo",
             }),
-            "no password"
+            "no password",
         ),
-        (
-            serde_json::json!({}),
-            "empty form"
-        ),
+        (serde_json::json!({}), "empty form"),
     ];
 
     for (case, msg) in invalid_cases {
@@ -37,7 +34,8 @@ async fn signin_form_fields_problem() {
         assert_eq!(
             response.status().as_u16(),
             400,
-            "{} returns client error status", msg
+            "{} returns client error status",
+            msg
         );
     }
 }
@@ -53,14 +51,14 @@ async fn signin_form_wrong_credentials() {
                 "username": "bar",
                 "password": "secret",
             }),
-            "invalid username"
+            "invalid username",
         ),
         (
             serde_json::json!({
                 "username": "foo",
                 "password": "not_my_secret"
             }),
-            "invalid password"
+            "invalid password",
         ),
     ];
 
@@ -78,7 +76,8 @@ async fn signin_form_wrong_credentials() {
         assert_eq!(
             response.status().as_u16(),
             401,
-            "{} returns client error 401 Unauthorized", msg
+            "{} returns client error 401 Unauthorized",
+            msg
         );
     }
 }

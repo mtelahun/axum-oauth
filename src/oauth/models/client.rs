@@ -1,7 +1,6 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::{ClientId, UserId};
-
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct ClientQuery {

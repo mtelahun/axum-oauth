@@ -1,8 +1,4 @@
-pub const SCOPES: &[&str] = &[
-    Account::READ,
-    Account::WRITE,
-    Account::FOLLOW,
-];
+pub const SCOPES: &[&str] = &[Account::READ, Account::WRITE, Account::FOLLOW];
 
 pub trait Resource {
     const READ: &'static str;

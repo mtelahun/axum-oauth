@@ -1,19 +1,11 @@
-use std::{collections::HashMap, future::Future};
-
-use axum::{
-    routing::{get, post},
-    Router, Server, extract::{Query, State}, response::{Redirect, Html}, Json,
-};
 use once_cell::sync::Lazy;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use tracing::subscriber::set_global_default;
 use tracing::Subscriber;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Registry};
-
-use crate::oauth_client_helper::{ClientConfig, Client, Error as OAuthClientError};
 
 pub fn get_subscriber<Sink>(
     name: String,
@@ -42,6 +34,7 @@ pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
 }
 
 // Just copied trait bounds and signature from `spawn_blocking`
+#[allow(dead_code)]
 pub fn spawn_blocking_with_tracing<F, R>(f: F) -> JoinHandle<R>
 where
     F: FnOnce() -> R + Send + 'static,
@@ -102,7 +95,7 @@ pub async fn spawn_app() -> TestState {
     let (router, listener) = axum_oauth::build_service(Some("0.0.0.0:0".to_string()), 3000).await;
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(axum_oauth::serve(router, listener));
-    
+
     let reqwest_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .cookie_store(true)
@@ -119,11 +112,17 @@ pub async fn spawn_app() -> TestState {
     res
 }
 
-pub fn assert_is_redirect_to(response: &reqwest::Response, status_code: u16, location: &str, location_is_partial: bool) {
+pub fn assert_is_redirect_to(
+    response: &reqwest::Response,
+    status_code: u16,
+    location: &str,
+    location_is_partial: bool,
+) {
     assert_eq!(
         response.status().as_u16(),
         status_code,
-        "received https status code: {} Redirect", status_code
+        "received https status code: {} Redirect",
+        status_code
     );
     if !location_is_partial {
         assert_eq!(
@@ -134,11 +133,11 @@ pub fn assert_is_redirect_to(response: &reqwest::Response, status_code: u16, loc
         )
     } else {
         let loc_header = response
-                .headers()
-                .get("Location")
-                .unwrap()
-                .to_str()
-                .expect("failed to convert header to str");
+            .headers()
+            .get("Location")
+            .unwrap()
+            .to_str()
+            .expect("failed to convert header to str");
 
         assert!(
             loc_header.contains(location),
@@ -147,70 +146,26 @@ pub fn assert_is_redirect_to(response: &reqwest::Response, status_code: u16, loc
     }
 }
 
-pub async fn dummy_client() -> impl Future {
-    let config = ClientConfig {
-        protected_url: "http://localhost:3000/oauth".into(),
-        token_url: "http://localhost:3000/oauth/token".into(),
-        refresh_url: "http://localhost:3000/oauth/refresh".into(),
-        redirect_uri: "http://localhost:3001/oauth/endpoint".into(),
-        client_id: "LocalClient".into(),
-        client_secret: Some("test".into()),
-    };
-    let client = Client::new(config);
-    let app = Router::new()
-        .route("/endpoint", get(endpoint))
-        .route("/refresh", post(refresh))
-        .route("/", get(get_with_token))
-        .with_state(client);
-        
-    tracing::debug!("Starting dummy client");
-    Server::bind(&"127.0.0.1:3001".parse().unwrap())
-        .serve(app.into_make_service())
-}
-
 #[derive(Debug, Serialize)]
 struct AuthorizationCode {
     code: String,
 }
-async fn endpoint(
-    query: Query<HashMap<String, String>>,
-    State(state): State<Client>,
-) -> Result<Json<AuthorizationCode>, OAuthClientError> {
-    if let Some(_) = query.get("error") {
-        return Err(OAuthClientError::MissingToken)
-    }
 
-    let code = match query.get("code") {
-        None => return Err(OAuthClientError::MissingToken),
-        Some(code) => code.clone(),
-    };
-    // state.authorize(&code).await?;
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Token {
+    pub token_type: String,
 
-    Ok(Json(AuthorizationCode { code }))
-}
+    pub scope: String,
 
-async fn refresh(State(state): State<Client>) -> Result<Redirect, OAuthClientError> {
-    state.refresh().await?;
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>,
 
-    Ok(Redirect::to("/"))
-}
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
 
-async fn get_with_token(State(state): State<Client>) -> Result<Html<String>, OAuthClientError> {
-    let protected_page = state.retrieve_protected_page().await?;
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_in: Option<i64>,
 
-    let display_page = format!(
-        "<html><style>
-            aside{{overflow: auto; word-break: keep-all; white-space: nowrap}}
-            main{{text-align: center}}
-            main>aside,main>article{{margin: auto; text-align: left; border: 1px solid black; width: 50%}}
-        </style>
-        <main>
-        Used token <aside style>{}</aside> to access
-        <a href=\"http://localhost:8020/\">http://localhost:8020/</a>.
-        Its contents are:
-        <article>{}</article>
-        <form action=\"refresh\" method=\"post\"><button>Refresh token</button></form>
-        </main></html>", state.as_html().await, protected_page);
-
-    Ok(Html::from(display_page))
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }

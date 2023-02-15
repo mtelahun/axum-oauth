@@ -1,9 +1,6 @@
 use crate::oauth::{
-    database::Database,
-    routes::session::Session,
-    solicitor::Solicitor,
-    Consent,
-    error::Error, models::{ClientId, UserClientId},
+    database::Database, error::Error, models::UserClientId, routes::session::Session,
+    solicitor::Solicitor, Consent,
 };
 use axum::{
     extract::{FromRef, Query, State},
@@ -68,7 +65,8 @@ async fn post_authorize(
                         client_id, scope, ..
                     } = solicitation.pre_grant().clone();
 
-                    let previous_scope = db.get_scope(&user, client_id.parse::<UserClientId>().unwrap());
+                    let previous_scope =
+                        db.get_scope(&user, client_id.parse::<UserClientId>().unwrap());
                     if previous_scope.is_none() || previous_scope.unwrap() < scope {
                         db.update_client_scope(client_id.parse::<UserClientId>().unwrap(), &scope);
                     }

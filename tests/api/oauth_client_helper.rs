@@ -5,10 +5,10 @@ extern crate serde_json;
 use axum::http::StatusCode;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-use std::fmt;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use self::reqwest::header;
 use oxide_auth::endpoint::UniqueValue;
@@ -71,25 +71,6 @@ struct ClientState {
     pub until: Option<i64>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Token {
-    pub token_type: String,
-
-    pub scope: String,
-
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub access_token: Option<String>,
-
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub refresh_token: Option<String>,
-
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub expires_in: Option<i64>,
-
-    #[serde(skip_serializing_if="Option::is_none")]
-    pub error: Option<String>,
-}
-
 impl Client {
     pub fn new(config: ClientConfig) -> Self {
         Client {
@@ -108,21 +89,21 @@ impl Client {
         params.insert("grant_type", "authorization_code");
         params.insert("code", code);
         params.insert("redirect_uri", &self.config.redirect_uri);
-        let access_token_request =  match &self.config.client_secret{
+        let access_token_request = match &self.config.client_secret {
             Some(client_secret) => client
                 .post(&self.config.token_url)
                 .form(&params)
                 .basic_auth(&self.config.client_id, client_secret.get_unique())
                 .build()
                 .unwrap(),
-            None =>{
+            None => {
                 params.insert("client_id", &self.config.client_id);
                 client
-                .post(&self.config.token_url)
-                .form(&params)
-                .build().unwrap()
+                    .post(&self.config.token_url)
+                    .form(&params)
+                    .build()
+                    .unwrap()
             }
-
         };
 
         let token_response = client
@@ -179,7 +160,6 @@ impl Client {
             None => return Err(Error::NoToken),
         };
 
-
         let mut params = HashMap::new();
         params.insert("grant_type", "refresh_token");
         params.insert("refresh_token", &refresh);
@@ -189,15 +169,16 @@ impl Client {
                 .post(&self.config.refresh_url)
                 .form(&params)
                 .basic_auth(&self.config.client_id, client_secret.get_unique())
-                .build().unwrap(),
+                .build()
+                .unwrap(),
             None => {
                 params.insert("client_id", &self.config.client_id);
                 client
                     .post(&self.config.refresh_url)
                     .form(&params)
-                    .build().unwrap()
+                    .build()
+                    .unwrap()
             }
-
         };
         let token_response = client
             .execute(access_token_request)
@@ -209,15 +190,10 @@ impl Client {
             return Err(Error::MissingToken);
         }
 
-        let token = token_map
-            .access_token
-            .unwrap();
+        let token = token_map.access_token.unwrap();
         state.token = Some(token);
-        state.refresh = token_map
-            .refresh_token
-            .or(state.refresh.take());
-        state.until = token_map
-            .expires_in;
+        state.refresh = token_map.refresh_token.or(state.refresh.take());
+        state.until = token_map.expires_in;
         Ok(())
     }
 
@@ -252,7 +228,9 @@ impl fmt::Display for Error {
         match self {
             Error::AuthorizationFailed => f.write_str("Could not fetch bearer token"),
             Error::NoToken => f.write_str("No token with which to access protected page"),
-            Error::AccessFailed => f.write_str("Access token failed to authorize for protected page"),
+            Error::AccessFailed => {
+                f.write_str("Access token failed to authorize for protected page")
+            }
             Error::RefreshFailed => f.write_str("Could not refresh bearer token"),
             Error::Invalid(serde) => write!(f, "Bad json response: {}", serde),
             Error::MissingToken => write!(f, "No token nor error in server response"),

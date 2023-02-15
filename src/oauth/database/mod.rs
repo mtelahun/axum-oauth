@@ -10,11 +10,8 @@ use tokio::sync::RwLock;
 use crate::oauth::models::UserClientId;
 
 use self::{
-    clientmap::{ClientMap, ClientRecord},
-    resource::{
-        client::{AuthClient, ClientName},
-        user::AuthUser,
-    },
+    clientmap::ClientMap,
+    resource::{client::ClientName, user::AuthUser},
 };
 
 use super::models::{ClientId, UserId};
@@ -35,6 +32,12 @@ impl std::ops::Deref for Database {
     }
 }
 
+impl Default for Database {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Database {
     pub fn new() -> Database {
         Database {
@@ -47,7 +50,7 @@ impl Database {
 
     pub async fn register_user(&mut self, username: &str, password: Secret<String>) -> UserId {
         let id = UserId::new();
-        let u = UserRecord::new(id.clone(), username, &password.expose_secret());
+        let u = UserRecord::new(id, username, password.expose_secret());
         let mut map_lock = self.inner.user_db.write().await;
         map_lock.insert(id, u);
 
@@ -57,8 +60,10 @@ impl Database {
     pub async fn get_user_by_id(&self, user: &AuthUser) -> Result<UserRecord, StoreError> {
         let map_lock = self.inner.user_db.read().await;
         if self.contains_user_id(&user.user_id).await {
-            let record = map_lock.get(&user.user_id).ok_or(StoreError::DoesNotExist)?;
-            return Ok(record.clone())
+            let record = map_lock
+                .get(&user.user_id)
+                .ok_or(StoreError::DoesNotExist)?;
+            return Ok(record.clone());
         }
 
         Err(StoreError::DoesNotExist)
@@ -66,9 +71,9 @@ impl Database {
 
     pub async fn get_user_by_name(&self, username: &str) -> Result<UserRecord, StoreError> {
         let map_lock = self.inner.user_db.read().await;
-        for (_, v) in &*map_lock {
+        for v in (*map_lock).values() {
             if v.username == username {
-                return Ok(v.clone())
+                return Ok(v.clone());
             }
         }
 
@@ -90,9 +95,10 @@ impl Database {
     // XXX - Doesn't really belong in a storage interface. It's just expeditious.
     pub async fn verify_password(
         &self,
-        username: &String,
-        password: &String,
+        username: &str,
+        password: &str,
     ) -> Result<bool, StoreError> {
+        #[allow(unused_variables)]
         let map_lock = self.inner.user_db.read().await;
         let db = self.get_user_by_name(username).await?;
         let result = password == db.password.expose_secret();
@@ -120,12 +126,11 @@ impl Database {
         client_lock.register_client(&key, client_name, *user_id, client);
 
         let mut user_lock = self.inner.user_db.write().await;
-        let record = user_lock.get_mut(user_id)
-            .ok_or(StoreError::DoesNotExist)?;
+        let record = user_lock.get_mut(user_id).ok_or(StoreError::DoesNotExist)?;
         record.add_authorized_client(key.parse::<UserClientId>().unwrap());
 
         // There is currently no easy way to search ClientMap for a record. So, thisscopescopescope
-        // function will allways succeed. 
+        // function will allways succeed.
         Ok((key, None))
     }
 
@@ -151,40 +156,34 @@ impl Database {
         map_lock.register_client(&key, client_name, *user_id, client);
 
         let mut user_lock = self.inner.user_db.write().await;
-        let record = user_lock.get_mut(user_id)
-            .ok_or(StoreError::DoesNotExist)?;
+        let record = user_lock.get_mut(user_id).ok_or(StoreError::DoesNotExist)?;
         record.add_authorized_client(key.parse::<UserClientId>().unwrap());
 
         // There is currently no easy way to search ClientMap for a record. So, this
-        // function will allways succeed. 
+        // function will allways succeed.
         Ok((key, Some(secret)))
     }
 
-    pub async fn get_client_name(
-        &self,
-        client_id: UserClientId,
-    ) -> Result<ClientName, StoreError> {
+    pub async fn get_client_name(&self, client_id: UserClientId) -> Result<ClientName, StoreError> {
         let map_lock = self.inner.client_db.read().await;
         let record = map_lock
             .clients
             .get(client_id.as_str())
             .ok_or(StoreError::InternalError)?;
-        
+
         Ok(ClientName {
             inner: record.name.clone(),
         })
     }
 
-    pub fn get_scope(&self, user: &AuthUser, client: UserClientId) -> Option<Scope> {
+    pub fn get_scope(&self, _user: &AuthUser, _client: UserClientId) -> Option<Scope> {
         match "account::read".parse() {
             Ok(scope) => Some(scope),
             Err(_) => None,
         }
     }
 
-    pub fn update_client_scope(&self, client: UserClientId, scope: &Scope) {
-        ()
-    }
+    pub fn update_client_scope(&self, _client: UserClientId, _scope: &Scope) {}
 }
 
 #[derive(Clone)]
@@ -221,7 +220,7 @@ impl UserRecord {
 
     pub fn id(&self) -> Option<UserId> {
         if !self.username.is_empty() {
-            return Some(self.id)
+            return Some(self.id);
         }
 
         None
@@ -231,8 +230,7 @@ impl UserRecord {
         self.authorized_clients.push(client_id);
     }
 
-    pub fn get_authorized_clients(&self) -> &Vec<UserClientId>
-    {
+    pub fn get_authorized_clients(&self) -> &Vec<UserClientId> {
         &self.authorized_clients
     }
 }

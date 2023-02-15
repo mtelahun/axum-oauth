@@ -10,8 +10,7 @@ impl Registrar for Database {
     async fn bound_redirect<'a>(
         &self,
         bound: ClientUrl<'a>,
-    ) -> Result<BoundClient<'a>, RegistrarError> 
-    {
+    ) -> Result<BoundClient<'a>, RegistrarError> {
         let client_map_lock = self.inner.client_db.read().await;
         client_map_lock.bound_redirect(bound).await
     }
@@ -20,8 +19,7 @@ impl Registrar for Database {
         &self,
         bound: BoundClient<'a>,
         scope: Option<Scope>,
-    ) -> Result<PreGrant, RegistrarError> 
-    {
+    ) -> Result<PreGrant, RegistrarError> {
         let client_map_lock = self.inner.client_db.read().await;
         client_map_lock.negotiate(bound, scope).await
     }
@@ -30,8 +28,7 @@ impl Registrar for Database {
         &self,
         client_id: &str,
         passphrase: Option<&[u8]>,
-    ) -> Result<(), RegistrarError> 
-    {
+    ) -> Result<(), RegistrarError> {
         let client_map_lock = self.inner.client_db.read().await;
         client_map_lock.check(client_id, passphrase).await
     }

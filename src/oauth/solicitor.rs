@@ -1,12 +1,12 @@
 use crate::oauth::{
     database::{
         resource::{
-            client::{EncodedClient, AuthClient, ClientName},
-            user::{AuthUser, AuthorizationQuery, Authorization},
+            client::AuthClient,
+            user::{AuthUser, Authorization},
         },
         Database,
     },
-    templates::Authorize, error::Error, models::UserClientId,
+    templates::Authorize,
 };
 use askama::Template;
 use oxide_auth::endpoint::{OwnerConsent, Solicitation, WebRequest};
@@ -57,22 +57,19 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         // let client_key_id = (self.user.user_id.to_string() + client_id.id.to_string().as_str())
         //     .parse::<UserClientId>()
         //     .unwrap();
-        let user_client_id = match client_id.
-            to_user_client_id()
-            .map_err(map_err)
-        {
+        let user_client_id = match client_id.to_user_client_id().map_err(map_err) {
             Ok(id) => id,
-            Err(err) => return err,            
+            Err(err) => return err,
         };
 
         let previous_scope = self.db.get_scope(&self.user, user_client_id);
-        let authorization = match previous_scope {
-            Some(scope) => Some(Authorization { scope }),
-            _ => None,
-        };
+        let authorization = previous_scope.map(|scope| Authorization { scope });
 
         tracing::debug!("Current scope of client: {:?}", authorization);
-        tracing::debug!("Requested grant scope: {:?}", solicitation.pre_grant().scope);
+        tracing::debug!(
+            "Requested grant scope: {:?}",
+            solicitation.pre_grant().scope
+        );
         match authorization {
             // Yes, there is and it's scope >= requested scope. Return authorized consent.
             Some(Authorization { scope }) if scope >= solicitation.pre_grant().scope => {
@@ -84,16 +81,16 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         }
 
         // Attempt to get user and encoded client records
-        let res = self.db.get_client_name(user_client_id)
+        let res = self
+            .db
+            .get_client_name(user_client_id)
             .await
             .map_err(map_err);
         let client = match res {
             Ok(name) => name,
             Err(err) => return err,
         };
-        let res = self.db.get_user_by_id(&self.user)
-            .await
-            .map_err(map_err);
+        let res = self.db.get_user_by_id(&self.user).await.map_err(map_err);
         let user = match res {
             Ok(user) => user,
             Err(err) => return err,

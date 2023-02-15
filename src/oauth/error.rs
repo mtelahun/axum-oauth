@@ -26,9 +26,12 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            #[allow(unused_variables)]
             Error::Database { source } => write!(f, "Database error"),
             Error::NotFound => write!(f, "Not found"),
+            #[allow(unused_variables)]
             Error::InvalidKey { source } => write!(f, "Invalid key"),
+            #[allow(unused_variables)]
             Error::Hash { source } => write!(f, "Invalid hash in database"),
             Error::OAuth { source } => write!(f, "{source}"),
             Error::InternalError => write!(f, "Unexpected internal error"),

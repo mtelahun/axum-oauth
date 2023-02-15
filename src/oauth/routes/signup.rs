@@ -1,11 +1,5 @@
-use std::str::FromStr;
-
 use super::{Callback, UserForm};
-use crate::oauth::{
-    database::{Database, UserRecord},
-    error::{Error, Result},
-    templates::SignUp
-};
+use crate::oauth::{database::Database, error::Result, templates::SignUp};
 use axum::{
     extract::{Form, FromRef, Query, State},
     response::{IntoResponse, Redirect},
@@ -32,14 +26,15 @@ async fn get_signup(query: Option<Query<Callback<'_>>>) -> impl IntoResponse {
 
 async fn post_signup(
     State(mut db): State<Database>,
-    query: Option<Query<Callback<'_>>>,
+    _query: Option<Query<Callback<'_>>>,
     Form(user): Form<UserForm>,
 ) -> Result<impl IntoResponse> {
     if db.contains_user_name(&user.username).await {
-        return Ok(Redirect::to("signin"))
+        return Ok(Redirect::to("signin"));
     }
 
-    db.register_user(&user.username, Secret::from(user.password)).await;
+    db.register_user(&user.username, Secret::from(user.password))
+        .await;
 
     Ok(Redirect::to("/"))
 }

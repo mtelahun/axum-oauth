@@ -1,4 +1,6 @@
 # axum-oauth
+![Rust](https://github.com/trevi-software/rhodos/actions/workflows/rust.yml/badge.svg)
+[![codecov](https://codecov.io/gh/trevi-software/rhodos/branch/main/graph/badge.svg?token=A1P9I5E2LU)](https://codecov.io/gh/trevi-software/rhodos)
 This is an example repo I created to help me understand authentication in rust using OAuth 2.0. This
 application is for server-side OAuth using the [oxide-oauth](https://github.com/HeroicKatora/oxide-auth),
 [oxide-auth-async](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-async), and 

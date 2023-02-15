@@ -40,7 +40,12 @@ impl<'a> Authorize<'a> {
         username: &'a str,
         client_name: &'a str,
     ) -> Self {
-        tracing::debug!("in Authorize::new()\nusername: {:?}, client name: {:?}\nRequest: {:?}", username, client_name, req);
+        tracing::debug!(
+            "in Authorize::new()\nusername: {:?}, client name: {:?}\nRequest: {:?}",
+            username,
+            client_name,
+            req
+        );
         let query = req.query().unwrap();
         let grant = solicitation.pre_grant();
         let state = solicitation.state();
