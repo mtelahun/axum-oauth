@@ -122,6 +122,6 @@ jobs:
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v3
         with:
-          token:                f555d459-637e-412c-ab07-9c2045f30df7
+          token:                ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error:     true
 
