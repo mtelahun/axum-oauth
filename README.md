@@ -4,11 +4,11 @@
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 
 
-This is an example application I created to help me understand authentication in rust using OAuth 2.0. Specifically, it shows how to protect your backend APIs using server-side OAuth. It uses the [oxide-oauth](https://github.com/HeroicKatora/oxide-auth),
+This is an demo application I created to help me understand authentication in rust using OAuth 2.0. Specifically, it shows how to protect your backend APIs using server-side OAuth. It uses the [oxide-oauth](https://github.com/HeroicKatora/oxide-auth),
 [oxide-auth-async](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-async), and 
 [oxide-auth-axum](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-axum) crates.
 The oxide-auth documentation is a bit sparse and it isn't immediately obvious how to go
-about implementing an authentication server with it so I created this example application. As a starting point I used the only example
+about implementing an authentication server with it so I created this demo. As a starting point I used the only example
 I could find of an app using Oxide-auth with
 the Axum web server: [tf-viewer](https://github.com/danielalvsaaker/tf-viewer/) by 
 [@danielalvsaaker](https://github.com/danielalvsaaker).
@@ -25,8 +25,8 @@ full life-cycle example.
 
 - User registration
 - Sign-in
-- Client registration
-- Authorization
+- Client registration (public and private)
+- Authorization (public and private)
 - Protected resource access
 - Sign-out
 

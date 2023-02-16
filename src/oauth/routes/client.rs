@@ -48,13 +48,12 @@ async fn post_client(
     session: ReadableSession,
     Form(client_form): Form<ClientForm>,
 ) -> Result<impl IntoResponse> {
-    tracing::debug!("enter -> post_client()");
+    tracing::debug!("POST Handler: post_client()");
     let auth_user: AuthUser = match session.get("user") {
         Some(auth_user) => auth_user,
         _ => return Ok(Redirect::to("/oauth/signin").into_response()),
     };
     let user = auth_user.user_id;
-    tracing::debug!("    found session for user: {:?}", user);
 
     let client_name = client_form.name;
 
@@ -77,7 +76,7 @@ async fn post_client(
     }
 
     tracing::debug!(
-        "    return (id, secret): ({:?},{:?})",
+        "POST Handler: post_client(): return (id, secret): ({:?},{:?})",
         client_id,
         client_secret
     );
