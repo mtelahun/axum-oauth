@@ -1,3 +1,4 @@
+use csrf::CsrfToken;
 use serde::Serialize;
 
 use crate::helpers::{spawn_app, ClientResponse, ClientType, Token};
@@ -213,6 +214,7 @@ pub async fn happy_path_confidential_client_authorization_flow() {
 
     let code_verifier = pkce::code_verifier(128);
     let code_challenge = pkce::code_challenge(&code_verifier);
+    let csrf_token = CsrfToken::new(nanoid::nanoid!().into_bytes()).b64_string();
     let query = serde_json::json!({
         "response_type": "code",
         "redirect_uri": "http://localhost:3001/endpoint",
@@ -220,14 +222,19 @@ pub async fn happy_path_confidential_client_authorization_flow() {
         "scope": "account:read account:write account:follow",
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
-        "state": "12345",
+        "state": csrf_token,
     });
 
     // Act - 1
     let body = state.get_consent_prompt_confidential(&res, &query).await;
     let consent_response = state.owner_consent_allow(&body).await;
     let authorization_code = state
-        .capture_authorizer_redirect(&res, &consent_response, ClientType::Confidential)
+        .capture_authorizer_redirect(
+            &res,
+            &consent_response,
+            ClientType::Confidential,
+            &csrf_token,
+        )
         .await;
 
     // Arrange - 2
@@ -280,6 +287,7 @@ pub async fn happy_path_public_client_authorization_flow() {
 
     let code_verifier = pkce::code_verifier(128);
     let code_challenge = pkce::code_challenge(&code_verifier);
+    let csrf_token = CsrfToken::new(nanoid::nanoid!().into_bytes()).b64_string();
     let query = serde_json::json!({
         "response_type": "code",
         "redirect_uri": "http://localhost:3001/endpoint",
@@ -287,14 +295,14 @@ pub async fn happy_path_public_client_authorization_flow() {
         "scope": "account:read account:write account:follow",
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
-        "state": "12345",
+        "state": csrf_token,
     });
 
     // Act - 1
     let body = state.get_consent_prompt_public(&&query).await;
     let consent_response = state.owner_consent_allow(&body).await;
     let authorization_code = state
-        .capture_authorizer_redirect(&res, &consent_response, ClientType::Public)
+        .capture_authorizer_redirect(&res, &consent_response, ClientType::Public, &csrf_token)
         .await;
 
     // Arrange - 2

@@ -232,6 +232,7 @@ impl TestState {
         client: &ClientResponse,
         consent_response: &str,
         client_type: ClientType,
+        csrf: &str,
     ) -> String {
         // Send response from owner consent to authorization endpoint
         let client_request = self.api_client.post(consent_response);
@@ -261,6 +262,17 @@ impl TestState {
         let code = caps.get(1).map_or("X", |m| m.as_str());
         let code = urlencoding::decode(code).expect("failed to decode authorization code");
         tracing::debug!("Extracted code: {}", code);
+
+        let re_code = Regex::new("\\&state=(.*)").unwrap();
+        let caps = re_code.captures(&location).unwrap();
+        let state = caps.get(1).map_or("X", |m| m.as_str());
+        let state = urlencoding::decode(state).expect("failed to decode state");
+        tracing::debug!("Extracted state: {}", state);
+
+        assert_eq!(
+            state, csrf,
+            "Oauth state returned from authorization endpoint matches"
+        );
 
         code.into_owned()
     }

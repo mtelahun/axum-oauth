@@ -14,6 +14,7 @@ async-trait = "0.1.61"
 axum = { version = "0.6.1", features = ["headers"] }
 axum-macros = "0.3.1"
 axum-sessions = "0.4.1"
+csrf = "0.4.1"
 json = "0.12.4"
 jsonwebtoken = "8.2.0"
 nanoid = "0.4.0"
