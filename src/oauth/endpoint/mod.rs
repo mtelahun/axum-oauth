@@ -6,8 +6,12 @@ use oxide_auth::{
 };
 use oxide_auth_async::{
     endpoint::{
-        self, access_token::AccessTokenFlow, authorization::AuthorizationFlow,
-        refresh::RefreshFlow, resource::ResourceFlow,
+        self,
+        access_token::AccessTokenFlow,
+        authorization::AuthorizationFlow,
+        //        refresh::RefreshFlow, resource::ResourceFlow, client_credentials::ClientCredentialsFlow,
+        refresh::RefreshFlow,
+        resource::ResourceFlow,
     },
     primitives,
 };
@@ -80,6 +84,13 @@ where
             Err(_) => unreachable!(),
         }
     }
+
+    // pub fn client_credentials_flow(self) -> ClientCredentialsFlow<Self, OAuthRequest> {
+    //     match ClientCredentialsFlow::prepare(self) {
+    //         Ok(flow) => flow,
+    //         Err(_) => unreachable!(),
+    //     }
+    // }
 
     pub fn refresh_flow(self) -> RefreshFlow<Self, OAuthRequest> {
         match RefreshFlow::prepare(self) {

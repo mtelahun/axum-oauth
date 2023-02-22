@@ -97,6 +97,21 @@ async fn token(
 
     match &*grant_type {
         "refresh_token" => refresh(State(state), request).await,
+        // "client_credentials" => state
+        //     .endpoint()
+        //     .await
+        //     .with_solicitor(FnSolicitor(
+        //         move |_: &mut OAuthRequest, solicitation: Solicitation| {
+        //             let PreGrant {
+        //                 client_id, ..
+        //             } = solicitation.pre_grant().clone();
+        //             tracing::debug!("Client credentials consent OK: {}", client_id);
+        //             OwnerConsent::Authorized(client_id.to_string())
+        //         },
+        //     ))
+        //     .client_credentials_flow()
+        //     .execute(request)
+        //     .await,
         _ => {
             state
                 .endpoint()
