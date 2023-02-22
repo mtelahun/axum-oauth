@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause)
 
 
-This is an demo application I created to help me understand authentication in rust using OAuth 2.0. Specifically, it shows how to protect your backend APIs using server-side OAuth. It uses the [oxide-oauth](https://github.com/HeroicKatora/oxide-auth),
+This is a demo application I created to help me understand authentication in rust using OAuth 2.0. Specifically, it shows how to protect your backend APIs using server-side OAuth. It uses the [oxide-auth](https://github.com/HeroicKatora/oxide-auth),
 [oxide-auth-async](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-async), and 
 [oxide-auth-axum](https://github.com/HeroicKatora/oxide-auth/tree/master/oxide-auth-axum) crates.
 The oxide-auth documentation is a bit sparse and it isn't immediately obvious how to go

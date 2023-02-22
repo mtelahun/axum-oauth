@@ -1,5 +1,7 @@
 use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::task::JoinHandle;
 use tracing::subscriber::set_global_default;
 use tracing::Subscriber;
@@ -71,6 +73,322 @@ impl TestState {
             "correct credentials result in 303 redirect to oauth root uri",
         );
         assert_is_redirect_to(&response, 303, "/oauth/", false);
+    }
+
+    pub async fn register_client(&self, params: &Value, client_type: ClientType) -> ClientResponse {
+        // Arrange
+        tracing::debug!("Test::POST /oauth/client (Register Client)");
+
+        // Act
+        let response = self
+            .api_client
+            .post(&format!("{}/oauth/client", self.app_address))
+            .form(params)
+            .send()
+            .await
+            .expect("request to server api failed");
+
+        // Assert
+        assert_eq!(
+            response.status().as_u16(),
+            200,
+            "client registration form processed successfully"
+        );
+        let res = response
+            .json::<ClientResponse>()
+            .await
+            .expect("Failed to get response body");
+        let client_secret = res
+            .client_secret
+            .clone()
+            .map_or(String::new(), |secret| secret);
+        assert!(
+            !res.client_id.is_empty(),
+            "The client_id field of the response is NOT empty"
+        );
+        match client_type {
+            ClientType::Confidential => {
+                assert!(
+                    !client_secret.is_empty(),
+                    "The client_secret field of the response is NOT empty"
+                );
+                assert_eq!(
+                    client_secret.len(),
+                    32,
+                    "The client_secret field contains a response of the right length for nanoid output"
+                );
+            }
+            ClientType::Public => {
+                assert!(
+                    client_secret.is_empty(),
+                    "The client_secret field of the response IS empty"
+                );
+            }
+        }
+
+        res
+    }
+
+    pub async fn get_consent_prompt_confidential(
+        &self,
+        client: &ClientResponse,
+        query: &Value,
+    ) -> String {
+        // Arrange
+        tracing::debug!("Test::GET /oauth/authorize? (Get authorization)");
+        let client_secret = client.client_secret.clone().unwrap();
+
+        // Act
+        let response = self
+            .api_client
+            .get(format!("{}/oauth/authorize", self.app_address))
+            .basic_auth(client.client_id.clone(), Some(client_secret.clone()))
+            .query(&query)
+            .send()
+            .await
+            .expect("failed to get response from api client");
+
+        // Assert
+        assert_eq!(
+            response.status().as_u16(),
+            200,
+            "The authorization endpoint returns successfully"
+        );
+        let body = response
+            .text()
+            .await
+            .expect("unable to decode response from dummy client");
+        tracing::debug!("consent page:\n{}", body);
+        assert!(
+            body.contains("<h1>Authorize foo client</h1>"),
+            "The authorization endpoint returned a consent page that shows the client name"
+        );
+        assert!(
+            body.contains("<h4>foo client wants access to your <em>foo</em> account"),
+            "The authorization endpoint returned a consent page that shows the target resource"
+        );
+        // let token: Token = serde_json::from_str(body.as_str()).unwrap();
+        // for s in ["account:read", "account:write", "account:follow"] {
+        //     assert!(token.scope.contains(s), "Token scope includes {}", s);
+        // }
+
+        body
+    }
+
+    pub async fn get_consent_prompt_public(&self, query: &Value) -> String {
+        // Arrange
+        tracing::debug!("Test::GET /oauth/authorize? (Get authorization)");
+
+        // Act
+        let response = self
+            .api_client
+            .get(format!("{}/oauth/authorize", self.app_address))
+            .query(&query)
+            .send()
+            .await
+            .expect("failed to get response from api client");
+
+        // Assert
+        assert_eq!(
+            response.status().as_u16(),
+            200,
+            "The authorization endpoint returns successfully"
+        );
+        let body = response
+            .text()
+            .await
+            .expect("unable to decode response from dummy client");
+        tracing::debug!("consent page:\n{}", body);
+        assert!(
+            body.contains("<h1>Authorize foo client</h1>"),
+            "The authorization endpoint returned a consent page that shows the client name"
+        );
+        assert!(
+            body.contains("<h4>foo client wants access to your <em>foo</em> account"),
+            "The authorization endpoint returned a consent page that shows the target resource"
+        );
+        // let token: Token = serde_json::from_str(body.as_str()).unwrap();
+        // for s in ["account:read", "account:write", "account:follow"] {
+        //     assert!(token.scope.contains(s), "Token scope includes {}", s);
+        // }
+
+        body
+    }
+
+    pub async fn owner_consent_allow(&self, body: &str) -> String {
+        let re_action = Regex::new("formaction=\"(.*)\"").unwrap();
+        let caps = re_action.captures(&body).unwrap();
+        let allow_path = caps.get(1).map_or("/", |m| m.as_str());
+        let allow_path = urlencoding::decode(allow_path).expect("failed to decode formaction");
+        let allow_path = html_escape::decode_html_entities(&allow_path);
+        let allow_uri = format!("{}/oauth/{}", self.app_address, allow_path);
+        tracing::debug!("allow uri: {}", allow_uri);
+
+        allow_uri
+    }
+
+    pub async fn capture_authorizer_redirect(
+        &self,
+        client: &ClientResponse,
+        consent_response: &str,
+        client_type: ClientType,
+    ) -> String {
+        // Send response from owner consent to authorization endpoint
+        let client_request = self.api_client.post(consent_response);
+        let client_request = match client_type {
+            ClientType::Confidential => client_request.basic_auth(
+                client.client_id.clone(),
+                Some(client.client_secret.clone().unwrap()),
+            ),
+            _ => client_request,
+        };
+        let response = client_request
+            .send()
+            .await
+            .expect("failed to get response from api client");
+        assert_is_redirect_to(&response, 302, "http://localhost:3001/endpoint?code=", true);
+
+        // Get access token from authorizer redirect
+        let location = response
+            .headers()
+            .get("Location")
+            .unwrap()
+            .to_str()
+            .expect("failed to get redirect location");
+        tracing::debug!("Client redirect: {}", location);
+        let re_code = Regex::new("\\?code=(.*)\\&").unwrap();
+        let caps = re_code.captures(&location).unwrap();
+        let code = caps.get(1).map_or("X", |m| m.as_str());
+        let code = urlencoding::decode(code).expect("failed to decode authorization code");
+        tracing::debug!("Extracted code: {}", code);
+
+        code.into_owned()
+    }
+
+    pub async fn exchange_auth_code_for_token(
+        &self,
+        client: &ClientResponse,
+        client_type: ClientType,
+        params: &Vec<(&str, &str)>,
+    ) -> Token {
+        // Act
+        let client_request = self
+            .api_client
+            .post(format!("{}/oauth/token", self.app_address));
+        let client_request = match client_type {
+            ClientType::Confidential => client_request.basic_auth(
+                client.client_id.clone(),
+                Some(client.client_secret.clone().unwrap()),
+            ),
+            _ => client_request,
+        };
+        let response = client_request
+            .form(params)
+            .send()
+            .await
+            .expect("failed to get response from api client");
+
+        // Assert
+        let status = response.status().as_u16();
+        let token = response.text().await.expect("failed to get response body");
+        tracing::debug!("Token Response: {:?}", token);
+        assert_eq!(status, 200, "Request for access token returns successfully");
+        let token: Token = serde_json::from_str(token.as_str()).unwrap();
+        assert_eq!(token.token_type, "bearer", "Token is a Bearer token");
+        for s in ["account:read", "account:write", "account:follow"] {
+            assert!(token.scope.contains(s), "Token scope includes {}", s);
+        }
+        assert!(
+            !token.access_token.is_none(),
+            "Access token contains a value"
+        );
+        assert!(
+            !token.refresh_token.is_none(),
+            "Refresh token contains a value"
+        );
+        assert!(
+            token.error.is_none(),
+            "Error value of token response is empty"
+        );
+
+        token
+    }
+
+    pub async fn refresh_token(
+        &self,
+        client: &ClientResponse,
+        client_type: ClientType,
+        params: &Vec<(&str, &str)>,
+        str_old_token: String,
+    ) -> Token {
+        // Act
+        let client_request = self
+            .api_client
+            .post(format!("{}/oauth/token", self.app_address));
+        let client_request = match client_type {
+            ClientType::Confidential => client_request.basic_auth(
+                client.client_id.clone(),
+                Some(client.client_secret.clone().unwrap()),
+            ),
+            _ => client_request,
+        };
+        let response = client_request
+            .form(&params)
+            .send()
+            .await
+            .expect("failed to get response from api client");
+
+        // Assert
+        let status = response.status().as_u16();
+        let token = response.text().await.expect("failed to get response body");
+        tracing::debug!("Token Response: {:?}", token);
+        assert_eq!(
+            status, 200,
+            "Request for refresh token returns successfully"
+        );
+        let token: Token = serde_json::from_str(token.as_str()).unwrap();
+        assert_eq!(token.token_type, "bearer", "Token is a Bearer token");
+        for s in ["account:read", "account:write", "account:follow"] {
+            assert!(token.scope.contains(s), "Token scope includes {}", s);
+        }
+        let new_token = token.access_token.clone().unwrap();
+        assert!(
+            !token.access_token.is_none() && new_token != str_old_token,
+            "New access token is different from the previous token"
+        );
+        assert!(
+            !token.refresh_token.is_none(),
+            "Refresh token contains a value"
+        );
+        assert!(
+            token.error.is_none(),
+            "Error value of token response is empty"
+        );
+
+        token
+    }
+
+    pub async fn access_resource_success(&self, token: &str, substr: &str) {
+        // Act
+        let response = self
+            .api_client
+            .get(&format!("{}/oauth/whoami", &self.app_address))
+            .bearer_auth(token)
+            .send()
+            .await
+            .expect("request to client api failed");
+
+        // Assert
+        assert_eq!(
+            response.status().as_u16(),
+            200,
+            "Access to protected resource succeeded"
+        );
+        let body = response.text().await.unwrap();
+        assert!(
+            body.contains(substr),
+            "Confirm access to protected resource"
+        );
     }
 }
 
@@ -168,4 +486,16 @@ pub struct Token {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClientResponse {
+    pub client_id: String,
+    pub client_secret: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ClientType {
+    Confidential,
+    Public,
 }

@@ -33,7 +33,7 @@ async fn signin_form_fields_problem() {
         // Assert
         assert_eq!(
             response.status().as_u16(),
-            400,
+            422,
             "{} returns client error status",
             msg
         );

@@ -23,6 +23,9 @@ oxide-auth-async = "0.1.0"
 oxide-auth-axum = "0.3.0"
 pkce = "0.1.1"
 secrecy = "0.8.0"
+#oxide-auth = { git = "https://github.com/mtelahun/oxide-auth", rev="fc25c73" }
+#oxide-auth-async = { git = "https://github.com/mtelahun/oxide-auth", rev="fc25c73" }
+#oxide-auth-axum = { git = "https://github.com/mtelahun/oxide-auth", rev="fc25c73" }
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.91"
 serde_urlencoded = "0.7.1"
