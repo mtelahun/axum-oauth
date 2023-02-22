@@ -1,4 +1,8 @@
-use crate::oauth::{database::Database, primitives::scopes::Grant};
+use crate::oauth::{
+    database::Database,
+    primitives::scopes::Grant,
+    rhodos_scopes::{Account, Write},
+};
 use axum::{extract::FromRef, response::IntoResponse, routing::get, Json, Router};
 use axum_sessions::{async_session::MemoryStore, PersistencePolicy, SameSite, SessionLayer};
 use serde::{Deserialize, Serialize};
@@ -75,7 +79,7 @@ where
         .layer(session_layer)
 }
 
-async fn whoami(grant: Grant<()>) -> impl IntoResponse {
+async fn whoami(grant: Grant<Write<Account>>) -> impl IntoResponse {
     Json(grant.grant.owner_id)
 }
 

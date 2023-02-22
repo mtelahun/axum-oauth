@@ -112,6 +112,7 @@ impl Registrar for ClientMap {
     }
 
     fn check(&self, client_id: &str, passphrase: Option<&[u8]>) -> Result<(), RegistrarError> {
+        tracing::debug!("Registrar: check()");
         let password_policy = Self::current_policy(&self.password_policy);
 
         self.clients
@@ -122,6 +123,7 @@ impl Registrar for ClientMap {
                     .check_authentication(passphrase)
             })?;
 
+        tracing::debug!("Registrar: client check successfull");
         Ok(())
     }
 }
