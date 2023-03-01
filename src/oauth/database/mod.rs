@@ -7,8 +7,6 @@ use secrecy::{ExposeSecret, Secret};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::oauth::models::UserClientId;
-
 use self::{
     clientmap::ClientMap,
     resource::{client::ClientName, user::AuthUser},
@@ -111,10 +109,8 @@ impl Database {
         client_name: &str,
         url: &str,
         default_scope: &str,
-        user_id: &UserId,
     ) -> Result<(String, Option<String>), StoreError> {
         let id = ClientId::new();
-        let key = user_id.to_string() + id.to_string().as_str();
         let client = Client::public(
             id.as_str(),
             RegisteredUrl::Semantic(url.parse().unwrap()),
@@ -123,15 +119,11 @@ impl Database {
         tracing::debug!("Registering public client: {:?}", client);
 
         let mut client_lock = self.inner.client_db.write().await;
-        client_lock.register_client(&key, client_name, *user_id, client);
-
-        let mut user_lock = self.inner.user_db.write().await;
-        let record = user_lock.get_mut(user_id).ok_or(StoreError::DoesNotExist)?;
-        record.add_authorized_client(key.parse::<UserClientId>().unwrap());
+        client_lock.register_client(id.as_str(), client_name, client);
 
         // There is currently no easy way to search ClientMap for a record. So, thisscopescopescope
         // function will allways succeed.
-        Ok((key, None))
+        Ok((id.to_string(), None))
     }
 
     pub async fn register_confidential_client(
@@ -139,10 +131,8 @@ impl Database {
         client_name: &str,
         url: &str,
         default_scope: &str,
-        user_id: &UserId,
     ) -> Result<(String, Option<String>), StoreError> {
-        let id = ClientId::from_bytes(nanoid::nanoid!().as_bytes())
-            .map_err(|_| StoreError::InternalError)?;
+        let id = ClientId::new();
         let secret = nanoid::nanoid!(32);
         let client = Client::confidential(
             id.as_str(),
@@ -151,20 +141,15 @@ impl Database {
             secret.as_bytes(),
         );
         tracing::debug!("Registering confidential client: {:?}", &client);
-        let key = user_id.to_string() + id.to_string().as_str();
         let mut map_lock = self.inner.client_db.write().await;
-        map_lock.register_client(&key, client_name, *user_id, client);
-
-        let mut user_lock = self.inner.user_db.write().await;
-        let record = user_lock.get_mut(user_id).ok_or(StoreError::DoesNotExist)?;
-        record.add_authorized_client(key.parse::<UserClientId>().unwrap());
+        map_lock.register_client(id.as_str(), client_name, client);
 
         // There is currently no easy way to search ClientMap for a record. So, this
         // function will allways succeed.
-        Ok((key, Some(secret)))
+        Ok((id.to_string(), Some(secret)))
     }
 
-    pub async fn get_client_name(&self, client_id: UserClientId) -> Result<ClientName, StoreError> {
+    pub async fn get_client_name(&self, client_id: ClientId) -> Result<ClientName, StoreError> {
         let map_lock = self.inner.client_db.read().await;
         let record = map_lock
             .clients
@@ -176,14 +161,14 @@ impl Database {
         })
     }
 
-    pub fn get_scope(&self, _user: &AuthUser, _client: UserClientId) -> Option<Scope> {
+    pub fn get_scope(&self, _user: &AuthUser, _client: ClientId) -> Option<Scope> {
         match "account::read".parse() {
             Ok(scope) => Some(scope),
             Err(_) => None,
         }
     }
 
-    pub fn update_client_scope(&self, _client: UserClientId, _scope: &Scope) {}
+    pub fn update_client_scope(&self, _client: ClientId, _scope: &Scope) {}
 }
 
 #[derive(Clone)]
@@ -197,7 +182,7 @@ pub struct UserRecord {
     id: UserId,
     username: String,
     password: Secret<String>,
-    authorized_clients: Vec<UserClientId>,
+    authorized_clients: Vec<ClientId>,
 }
 
 impl UserRecord {
@@ -206,7 +191,7 @@ impl UserRecord {
             id,
             username: user.to_owned(),
             password: Secret::from(password.to_owned()),
-            authorized_clients: Vec::<UserClientId>::new(),
+            authorized_clients: Vec::<ClientId>::new(),
         }
     }
 
@@ -226,11 +211,11 @@ impl UserRecord {
         None
     }
 
-    pub fn add_authorized_client(&mut self, client_id: UserClientId) {
+    pub fn add_authorized_client(&mut self, client_id: ClientId) {
         self.authorized_clients.push(client_id);
     }
 
-    pub fn get_authorized_clients(&self) -> &Vec<UserClientId> {
+    pub fn get_authorized_clients(&self) -> &Vec<ClientId> {
         &self.authorized_clients
     }
 }

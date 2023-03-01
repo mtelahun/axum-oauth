@@ -112,7 +112,6 @@ pub async fn happy_path_register_client_confidential() {
         "redirect_uri": "https://foo/authorized",
         "type": "confidential",
     });
-    state.signin("foo", "secret").await;
 
     // Act
     let response = state
@@ -163,7 +162,6 @@ pub async fn happy_path_register_client_public() {
         "redirect_uri": "https://foo/authorized",
         "type": "public",
     });
-    state.signin("foo", "secret").await;
 
     // Act
     let response = state
@@ -282,8 +280,8 @@ pub async fn happy_path_public_client_authorization_flow() {
         "redirect_uri": "http://localhost:3001/endpoint",
         "type": "public",
     });
-    state.signin("foo", "secret").await;
     let res = state.register_client(&params, ClientType::Public).await;
+    state.signin("foo", "secret").await;
 
     let code_verifier = pkce::code_verifier(128);
     let code_challenge = pkce::code_challenge(&code_verifier);

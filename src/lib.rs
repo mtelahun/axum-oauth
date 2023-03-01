@@ -39,7 +39,7 @@ pub async fn serve(app: Router, listener: TcpListener) {
 
 async fn get_router() -> Router {
     let mut auth_db = AuthDB::new();
-    let user_id = auth_db
+    let _ = auth_db
         .register_user("foo", Secret::from("secret".to_string()))
         .await;
     let _ = auth_db
@@ -47,7 +47,6 @@ async fn get_router() -> Router {
             "LocalClient",
             "https://www.thunderclient.com/oauth/callback",
             "account::read",
-            &user_id,
         )
         .await;
     let state = oauth::state::State::new(auth_db.clone());

@@ -123,4 +123,3 @@ macro_rules! declare_id {
 
 declare_id!(UserId, 21);
 declare_id!(ClientId, 21);
-declare_id!(UserClientId, 42);

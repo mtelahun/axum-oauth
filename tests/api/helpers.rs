@@ -189,16 +189,16 @@ impl TestState {
             .expect("failed to get response from api client");
 
         // Assert
-        assert_eq!(
-            response.status().as_u16(),
-            200,
-            "The authorization endpoint returns successfully"
-        );
+        let status = response.status().as_u16();
         let body = response
             .text()
             .await
             .expect("unable to decode response from dummy client");
         tracing::debug!("consent page:\n{}", body);
+        assert_eq!(
+            status, 200,
+            "The authorization endpoint returns successfully"
+        );
         assert!(
             body.contains("<h1>Authorize foo client</h1>"),
             "The authorization endpoint returned a consent page that shows the client name"

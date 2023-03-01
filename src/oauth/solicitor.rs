@@ -53,16 +53,13 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
             Err(err) => return err,
         };
 
-        // Is there already an authorization (user:client pair) ?
-        // let client_key_id = (self.user.user_id.to_string() + client_id.id.to_string().as_str())
-        //     .parse::<UserClientId>()
-        //     .unwrap();
-        let user_client_id = match client_id.to_user_client_id().map_err(map_err) {
-            Ok(id) => id,
-            Err(err) => return err,
-        };
+        // XXX - TODO Is there already an authorization (user:client pair) ?
+        // let user_client_id = match client_id.to_user_client_id().map_err(map_err) {
+        //     Ok(id) => id,
+        //     Err(err) => return err,
+        // };
 
-        let previous_scope = self.db.get_scope(&self.user, user_client_id);
+        let previous_scope = self.db.get_scope(&self.user, client_id.id);
         let authorization = previous_scope.map(|scope| Authorization { scope });
 
         tracing::debug!("Current scope of client: {:?}", authorization);
@@ -81,11 +78,7 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         }
 
         // Attempt to get user and encoded client records
-        let res = self
-            .db
-            .get_client_name(user_client_id)
-            .await
-            .map_err(map_err);
+        let res = self.db.get_client_name(client_id.id).await.map_err(map_err);
         let client = match res {
             Ok(name) => name,
             Err(err) => return err,
