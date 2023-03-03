@@ -4,7 +4,7 @@ use oxide_auth::{
     primitives::registrar::{Client, RegisteredUrl},
 };
 use secrecy::{ExposeSecret, Secret};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tokio::sync::RwLock;
 
 use self::{
@@ -57,14 +57,11 @@ impl Database {
 
     pub async fn get_user_by_id(&self, user: &AuthUser) -> Result<UserRecord, StoreError> {
         let map_lock = self.inner.user_db.read().await;
-        if self.contains_user_id(&user.user_id).await {
-            let record = map_lock
-                .get(&user.user_id)
-                .ok_or(StoreError::DoesNotExist)?;
-            return Ok(record.clone());
-        }
+        let record = map_lock
+            .get(&user.user_id)
+            .ok_or(StoreError::DoesNotExist)?;
 
-        Err(StoreError::DoesNotExist)
+        Ok(record.clone())
     }
 
     pub async fn get_user_by_name(&self, username: &str) -> Result<UserRecord, StoreError> {
@@ -161,14 +158,71 @@ impl Database {
         })
     }
 
-    pub fn get_scope(&self, _user: &AuthUser, _client: ClientId) -> Option<Scope> {
-        match "account::read".parse() {
-            Ok(scope) => Some(scope),
-            Err(_) => None,
+    pub async fn get_scope(&self, user_id: UserId, client_id: ClientId) -> Option<Scope> {
+        tracing::debug!("in get_scope()");
+        let map_lock = self.inner.user_db.read().await;
+        let record = map_lock.get(&user_id);
+        if record.is_some() {
+            let client_lst = record.unwrap().get_authorized_clients();
+            for auth in client_lst {
+                if auth.client_id == client_id {
+                    tracing::debug!("  current scope: {:?}", auth.scope);
+                    return Some(auth.scope.clone());
+                }
+            }
         }
+
+        Some(Scope::from_str("").unwrap())
     }
 
-    pub fn update_client_scope(&self, _client: ClientId, _scope: &Scope) {}
+    pub async fn update_client_scope(
+        &self,
+        user_id: UserId,
+        client_id: ClientId,
+        scope: Scope,
+    ) -> Result<(), StoreError> {
+        tracing::debug!("in update_client_scope()");
+        let mut map_write = self.inner.user_db.write().await;
+        let record = map_write.get_mut(&user_id);
+        if record.is_some() {
+            let record = record.unwrap();
+            let auth_list: &mut Vec<ClientAuthorization> = record.get_authorized_clients_mut();
+            for auth in auth_list.iter_mut() {
+                if auth.client_id == client_id {
+                    auth.scope = scope;
+                    return Ok(());
+                }
+            }
+
+            // couldn't find client authorization, insert a new one
+            tracing::debug!("  unable to find authorization, inserting new one");
+            record.add_authorized_client(client_id, scope);
+        }
+
+        Err(StoreError::DoesNotExist)
+    }
+
+    pub async fn update_client_scope_from_str(
+        &self,
+        user_id: UserId,
+        client_id: ClientId,
+        scope: &str,
+    ) -> Result<(), StoreError> {
+        let mut map_write = self.inner.user_db.write().await;
+        let record = map_write.get_mut(&user_id);
+        if record.is_some() {
+            let auth_list: &mut Vec<ClientAuthorization> =
+                record.unwrap().get_authorized_clients_mut();
+            for auth in auth_list.iter_mut() {
+                if auth.client_id == client_id {
+                    auth.scope = Scope::from_str(scope).map_err(|_| StoreError::InternalError)?;
+                    return Ok(());
+                }
+            }
+        }
+
+        Err(StoreError::DoesNotExist)
+    }
 }
 
 #[derive(Clone)]
@@ -182,7 +236,7 @@ pub struct UserRecord {
     id: UserId,
     username: String,
     password: Secret<String>,
-    authorized_clients: Vec<ClientId>,
+    authorized_clients: Vec<ClientAuthorization>,
 }
 
 impl UserRecord {
@@ -191,7 +245,7 @@ impl UserRecord {
             id,
             username: user.to_owned(),
             password: Secret::from(password.to_owned()),
-            authorized_clients: Vec::<ClientId>::new(),
+            authorized_clients: Vec::<ClientAuthorization>::new(),
         }
     }
 
@@ -211,13 +265,24 @@ impl UserRecord {
         None
     }
 
-    pub fn add_authorized_client(&mut self, client_id: ClientId) {
-        self.authorized_clients.push(client_id);
+    pub fn add_authorized_client(&mut self, client_id: ClientId, scope: Scope) {
+        self.authorized_clients
+            .push(ClientAuthorization { client_id, scope });
     }
 
-    pub fn get_authorized_clients(&self) -> &Vec<ClientId> {
+    pub fn get_authorized_clients(&self) -> &Vec<ClientAuthorization> {
         &self.authorized_clients
     }
+
+    pub fn get_authorized_clients_mut(&mut self) -> &mut Vec<ClientAuthorization> {
+        &mut self.authorized_clients
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ClientAuthorization {
+    pub client_id: ClientId,
+    pub scope: oxide_auth::primitives::scope::Scope,
 }
 
 #[derive(Debug)]

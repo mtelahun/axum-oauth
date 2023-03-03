@@ -59,7 +59,7 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
         //     Err(err) => return err,
         // };
 
-        let previous_scope = self.db.get_scope(&self.user, client_id.id);
+        let previous_scope = self.db.get_scope(self.user.user_id, client_id.id).await;
         let authorization = previous_scope.map(|scope| Authorization { scope });
 
         tracing::debug!("Current scope of client: {:?}", authorization);

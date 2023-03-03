@@ -1,3 +1,4 @@
+use csrf::CsrfToken;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -46,10 +47,12 @@ where
     tokio::task::spawn_blocking(move || current_span.in_scope(f))
 }
 
+#[derive(Debug, Default)]
 pub struct TestState {
     pub app_address: String,
     pub port: u16,
     pub api_client: reqwest::Client,
+    pub token: Token,
 }
 
 impl TestState {
@@ -142,7 +145,7 @@ impl TestState {
         let response = self
             .api_client
             .get(format!("{}/oauth/authorize", self.app_address))
-            .basic_auth(client.client_id.clone(), Some(client_secret.clone()))
+            //.basic_auth(client.client_id.clone(), Some(client_secret.clone()))
             .query(&query)
             .send()
             .await
@@ -402,6 +405,45 @@ impl TestState {
             "Confirm access to protected resource"
         );
     }
+
+    pub async fn authorization_flow(&mut self, client: &ClientResponse) {
+        let code_verifier = pkce::code_verifier(128);
+        let code_challenge = pkce::code_challenge(&code_verifier);
+        let csrf_token = CsrfToken::new(nanoid::nanoid!().into_bytes()).b64_string();
+        let query = serde_json::json!({
+            "response_type": "code",
+            "redirect_uri": "http://localhost:3001/endpoint",
+            "client_id": client.client_id.clone(),
+            "scope": "account:read account:write account:follow",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+            "state": csrf_token,
+        });
+
+        // Owner consent prompt + allow response + authorization code
+        let body = self.get_consent_prompt_confidential(client, &query).await;
+        let consent_response = self.owner_consent_allow(&body).await;
+        let authorization_code = self
+            .capture_authorizer_redirect(
+                client,
+                &consent_response,
+                ClientType::Confidential,
+                &csrf_token,
+            )
+            .await;
+
+        // Bearer token
+        let cv = String::from_utf8_lossy(&code_verifier);
+        let params = vec![
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", "http://localhost:3001/endpoint"),
+            ("code", &authorization_code),
+            ("code_verifier", &cv),
+        ];
+        self.token = self
+            .exchange_auth_code_for_token(client, ClientType::Confidential, &params)
+            .await;
+    }
 }
 
 // Ensure that the `tracing` stack is only initialized once
@@ -436,6 +478,7 @@ pub async fn spawn_app() -> TestState {
         app_address: format!("http://localhost:{}", port),
         port: port,
         api_client: reqwest_client,
+        ..Default::default()
     };
     tracing::debug!("The app was spawned at: {}", res.app_address);
 
@@ -481,7 +524,7 @@ struct AuthorizationCode {
     code: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Token {
     pub token_type: String,
 

@@ -2,10 +2,13 @@ use std::{borrow::Cow, collections::HashMap};
 
 use once_cell::sync::Lazy;
 use oxide_auth::{
-    endpoint::{PreGrant, Registrar, Scope},
-    primitives::registrar::{
-        Argon2, BoundClient, Client, ClientUrl, EncodedClient, PasswordPolicy, RegisteredClient,
-        RegistrarError,
+    endpoint::{PreGrant, Registrar},
+    primitives::{
+        registrar::{
+            Argon2, BoundClient, Client, ClientUrl, EncodedClient, PasswordPolicy,
+            RegisteredClient, RegistrarError,
+        },
+        scope::Scope,
     },
 };
 
@@ -33,7 +36,6 @@ impl ClientMap {
             id: id.clone(),
             name: name.to_owned(),
             encoded_client: client.encode(password_policy),
-            scopes: Vec::<crate::oauth::rhodos_scopes::Scopes>::new(),
         };
         self.clients.insert(id, record);
     }
@@ -132,7 +134,6 @@ pub struct ClientRecord {
     pub id: String,
     pub name: String,
     pub(crate) encoded_client: EncodedClient,
-    pub scopes: Vec<crate::oauth::rhodos_scopes::Scopes>,
 }
 
 impl ClientRecord {

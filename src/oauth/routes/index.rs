@@ -25,11 +25,12 @@ pub async fn index(
         .await
         .map_err(|e| Error::Database { source: e })?;
     tracing::debug!("user record: {:?}", user_record);
-    let client_ids = user_record.get_authorized_clients();
+    let authorized_clients = user_record.get_authorized_clients();
+    tracing::debug!("Authorized clients: {:?}", authorized_clients);
     let mut clients = Vec::<String>::new();
-    for id in client_ids {
+    for cauth in authorized_clients {
         let client_name = db
-            .get_client_name(*id)
+            .get_client_name(cauth.client_id)
             .await
             .map_err(|e| Error::Database { source: e })?;
         clients.push(client_name.inner);
