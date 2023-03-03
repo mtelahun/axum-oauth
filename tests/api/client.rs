@@ -224,7 +224,7 @@ pub async fn happy_path_confidential_client_authorization_flow() {
     });
 
     // Act - 1
-    let body = state.get_consent_prompt_confidential(&res, &query).await;
+    let body = state.get_consent_prompt_confidential(&query).await;
     let consent_response = state.owner_consent_allow(&body).await;
     let authorization_code = state
         .capture_authorizer_redirect(

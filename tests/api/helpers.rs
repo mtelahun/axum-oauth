@@ -132,20 +132,14 @@ impl TestState {
         res
     }
 
-    pub async fn get_consent_prompt_confidential(
-        &self,
-        client: &ClientResponse,
-        query: &Value,
-    ) -> String {
+    pub async fn get_consent_prompt_confidential(&self, query: &Value) -> String {
         // Arrange
         tracing::debug!("Test::GET /oauth/authorize? (Get authorization)");
-        let client_secret = client.client_secret.clone().unwrap();
 
         // Act
         let response = self
             .api_client
             .get(format!("{}/oauth/authorize", self.app_address))
-            //.basic_auth(client.client_id.clone(), Some(client_secret.clone()))
             .query(&query)
             .send()
             .await
@@ -421,7 +415,7 @@ impl TestState {
         });
 
         // Owner consent prompt + allow response + authorization code
-        let body = self.get_consent_prompt_confidential(client, &query).await;
+        let body = self.get_consent_prompt_confidential(&query).await;
         let consent_response = self.owner_consent_allow(&body).await;
         let authorization_code = self
             .capture_authorizer_redirect(
