@@ -1,9 +1,12 @@
-use super::{Callback, UserForm};
-use crate::oauth::{database::Database, error::Result, templates::SignUp};
+use super::{Callback, SignUpForm};
+use crate::oauth::{
+    database::Database,
+    error::{Error, Result},
+};
 use axum::{
     extract::{Form, FromRef, Query, State},
-    response::{IntoResponse, Redirect},
-    routing::get,
+    http::StatusCode,
+    routing::post,
     Router,
 };
 use secrecy::Secret;
@@ -13,28 +16,24 @@ where
     S: Send + Sync + 'static + Clone,
     Database: FromRef<S>,
 {
-    Router::new().route("/", get(get_signup).post(post_signup))
-}
-
-async fn get_signup(query: Option<Query<Callback<'_>>>) -> impl IntoResponse {
-    let query = &query
-        .as_ref()
-        .map(|Query(x)| serde_urlencoded::to_string(x).unwrap())
-        .unwrap_or_default();
-    SignUp { query }.into_response()
+    Router::new().route("/", post(post_signup))
 }
 
 async fn post_signup(
     State(mut db): State<Database>,
     _query: Option<Query<Callback<'_>>>,
-    Form(user): Form<UserForm>,
-) -> Result<impl IntoResponse> {
+    Form(user): Form<SignUpForm>,
+) -> Result<StatusCode, Error> {
     if db.contains_user_name(&user.username).await {
-        return Ok(Redirect::to("signin"));
+        return Err(Error::ResourceConflict);
     }
 
-    db.register_user(&user.username, Secret::from(user.password))
-        .await;
+    db.register_user(
+        &user.username,
+        Secret::from(user.password),
+        &user.given_name,
+    )
+    .await;
 
-    Ok(Redirect::to("/"))
+    Ok(StatusCode::CREATED)
 }

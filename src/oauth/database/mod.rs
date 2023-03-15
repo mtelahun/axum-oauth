@@ -46,9 +46,14 @@ impl Database {
         }
     }
 
-    pub async fn register_user(&mut self, username: &str, password: Secret<String>) -> UserId {
+    pub async fn register_user(
+        &mut self,
+        username: &str,
+        password: Secret<String>,
+        given_name: &str,
+    ) -> UserId {
         let id = UserId::new();
-        let u = UserRecord::new(id, username, password.expose_secret());
+        let u = UserRecord::new(id, username, password.expose_secret(), given_name);
         let mut map_lock = self.inner.user_db.write().await;
         map_lock.insert(id, u);
 
@@ -64,6 +69,20 @@ impl Database {
         Ok(record.clone())
     }
 
+    pub async fn update_given_name_by_id(
+        &mut self,
+        user: &AuthUser,
+        name: &str,
+    ) -> Result<bool, StoreError> {
+        let mut map_lock = self.inner.user_db.write().await;
+        let record = map_lock
+            .get_mut(&user.user_id)
+            .ok_or(StoreError::DoesNotExist)?;
+        record.update_given_name(name);
+
+        Ok(true)
+    }
+
     pub async fn get_user_by_name(&self, username: &str) -> Result<UserRecord, StoreError> {
         let map_lock = self.inner.user_db.read().await;
         for v in (*map_lock).values() {
@@ -73,11 +92,6 @@ impl Database {
         }
 
         Err(StoreError::DoesNotExist)
-    }
-
-    pub async fn contains_user_id(&self, id: &UserId) -> bool {
-        let map_lock = self.inner.user_db.read().await;
-        map_lock.contains_key(id)
     }
 
     pub async fn contains_user_name(&self, username: &str) -> bool {
@@ -201,28 +215,6 @@ impl Database {
 
         Err(StoreError::DoesNotExist)
     }
-
-    pub async fn update_client_scope_from_str(
-        &self,
-        user_id: UserId,
-        client_id: ClientId,
-        scope: &str,
-    ) -> Result<(), StoreError> {
-        let mut map_write = self.inner.user_db.write().await;
-        let record = map_write.get_mut(&user_id);
-        if record.is_some() {
-            let auth_list: &mut Vec<ClientAuthorization> =
-                record.unwrap().get_authorized_clients_mut();
-            for auth in auth_list.iter_mut() {
-                if auth.client_id == client_id {
-                    auth.scope = Scope::from_str(scope).map_err(|_| StoreError::InternalError)?;
-                    return Ok(());
-                }
-            }
-        }
-
-        Err(StoreError::DoesNotExist)
-    }
 }
 
 #[derive(Clone)]
@@ -234,24 +226,34 @@ pub struct Inner {
 #[derive(Clone, Debug)]
 pub struct UserRecord {
     id: UserId,
+    given_name: String,
     username: String,
     password: Secret<String>,
     authorized_clients: Vec<ClientAuthorization>,
 }
 
 impl UserRecord {
-    pub fn new(id: UserId, user: &str, password: &str) -> UserRecord {
+    pub fn new(id: UserId, user: &str, password: &str, given_name: &str) -> UserRecord {
         Self {
             id,
             username: user.to_owned(),
             password: Secret::from(password.to_owned()),
             authorized_clients: Vec::<ClientAuthorization>::new(),
+            given_name: given_name.to_owned(),
         }
     }
 
     pub fn username(&self) -> Option<String> {
         if !self.username.is_empty() {
             return Some(self.username.clone());
+        }
+
+        None
+    }
+
+    pub fn given_name(&self) -> Option<String> {
+        if !self.given_name.is_empty() {
+            return Some(self.given_name.clone());
         }
 
         None
@@ -276,6 +278,10 @@ impl UserRecord {
 
     pub fn get_authorized_clients_mut(&mut self) -> &mut Vec<ClientAuthorization> {
         &mut self.authorized_clients
+    }
+
+    pub fn update_given_name(&mut self, name: &str) {
+        self.given_name = name.to_owned();
     }
 }
 

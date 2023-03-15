@@ -11,3 +11,15 @@ Cargo.lock
 
 # Coverage files
 /coverage/*
+
+# svelte frontend
+svelte-frontend/.DS_Store
+svelte-frontend/node_modules
+svelte-frontend/build
+svelte-frontend/.svelte-kit
+svelte-frontend/package
+svelte-frontend/.env
+svelte-frontend/.env.*
+svelte-frontend/!.env.example
+svelte-frontend/vite.config.js.timestamp-*
+svelte-frontend/vite.config.ts.timestamp-*

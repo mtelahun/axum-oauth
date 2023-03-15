@@ -1,15 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{% endblock %} - Tf-auth</title>
+    <title>{% block title %}{% endblock %} - Axum OAuth</title>
     <base href="/oauth/">
-    <meta name="description" content="Authentication server.">
-    <link rel="shortcut icon" href="https://picocss.com/favicon.ico">
+    <meta name="description" content="OAuth backend.">
+    <link rel="shortcut icon" href="/assets/favicon.ico">
 
     <!-- Pico.css -->
-    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+    <link rel="stylesheet" href="/assets/pico.min.css">
   </head>
 
   <body>
@@ -17,13 +17,10 @@
     <!-- Nav -->
     <nav class="container-fluid">
       <ul>
-        <li><a href="" class="contrast" ><strong>Tf-auth</strong></a></li>
+        <li><a href="" class="contrast" ><strong>Axum OAuth Backend</strong></a></li>
       </ul>
       <ul>
         <li><a href="signout" class="contrast">Signout</a></li>
-        <li><a href="#" class="contrast" data-theme-switcher="auto">Auto</a></li>
-        <li><a href="#" class="contrast" data-theme-switcher="light">Light</a></li>
-				<li><a href="#" class="contrast" data-theme-switcher="dark">Dark</a></li>
       </ul>
     </nav>
 		<!-- ./ Nav -->
@@ -33,10 +30,6 @@
 			{% block content %}{% endblock %}
     </main>
 		<!-- ./ Main -->
-
-    <!-- Minimal theme switcher -->
-    <script>
-		</script>
 
   </body>
 </html>

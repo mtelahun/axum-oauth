@@ -3,20 +3,8 @@ use askama::Template;
 use oxide_auth::endpoint::WebRequest;
 
 #[derive(Template)]
-#[template(path = "index.html")]
-pub struct Index<'a> {
-    pub clients: &'a Vec<String>,
-}
-
-#[derive(Template)]
 #[template(path = "signin.html")]
 pub struct SignIn<'a> {
-    pub query: &'a str,
-}
-
-#[derive(Template)]
-#[template(path = "signup.html")]
-pub struct SignUp<'a> {
     pub query: &'a str,
 }
 
@@ -28,10 +16,6 @@ pub struct Authorize<'a> {
     pub username: &'a str,
     pub scopes: String,
 }
-
-#[derive(Template)]
-#[template(path = "client.html")]
-pub struct Client;
 
 impl<'a> Authorize<'a> {
     pub fn new(

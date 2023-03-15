@@ -12,7 +12,7 @@ use oxide_auth::{
     },
 };
 
-use crate::oauth::rhodos_scopes;
+use crate::oauth::scopes;
 
 static DEFAULT_PASSWORD_POLICY: Lazy<Argon2> = Lazy::new(Argon2::default);
 
@@ -97,7 +97,7 @@ impl Registrar for ClientMap {
             .and_then(|scope| {
                 scope
                     .iter()
-                    .filter(|scope| rhodos_scopes::SCOPES.contains(scope))
+                    .filter(|scope| scopes::SCOPES.contains(scope))
                     .collect::<Vec<_>>()
                     .join(" ")
                     .parse()
