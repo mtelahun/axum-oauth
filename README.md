@@ -20,8 +20,8 @@ the "just make it work" stage :grin:.
 ## Example App
 This example app shows a basic OAuth 2.0 authentication life-cycle for API access:
 
-**Note:** I haven't yet implemented a front-end app to show this functionality fully in a browser. See tests for 
-full life-cycle example.
+**Note:** ~~I haven't yet implemented a front-end app to show this functionality fully in a browser. See tests for 
+full life-cycle example.~~ This project now has a frontend built in [SvelteKit](https://kit.svelte.dev/)
 
 - User registration
 - Sign-in
@@ -30,8 +30,19 @@ full life-cycle example.
 - Protected resource access
 - Sign-out
 
+## Usage
+1. Clone this repo and `cd` into its root
+2. Run `cargo run`
+3. Change directory into the front-end: `cd svelte-frontend`
+4. Run `npm run dev`
+5. Open your browse to http://localhost:5137
+6. Click the button that says "Sign-in with OAuth"
+7. Use the default username/password pair to sign-in to the backend: `bob/secret`
+    
+    * By default the front-end only asks for account:read permission
+
 ## Internals
 [HashMap](https://doc.rust-lang.org/std/collections/struct.HashMap.html) - in-memory implementation of a user database. Also used to create a separate client registration database called __**ClientMap**__.
 
 
-[async-session](https://docs.rs/async-session/latest/async_session/) - for session management.
+[async-session](https://docs.rs/async-session/latest/async_session/) - for session management (**TO BE REMOVED.** Session management doesn't belong in the backend).
