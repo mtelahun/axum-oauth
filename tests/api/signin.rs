@@ -14,7 +14,7 @@ async fn signin_form_fields_problem() {
         ),
         (
             serde_json::json!({
-                "username": "foo",
+                "username": "bob",
             }),
             "no password",
         ),
@@ -55,7 +55,7 @@ async fn signin_form_wrong_credentials() {
         ),
         (
             serde_json::json!({
-                "username": "foo",
+                "username": "bob",
                 "password": "not_my_secret"
             }),
             "invalid password",
@@ -88,7 +88,7 @@ async fn happy_path_signin_form() {
     let test_state = spawn_app().await;
     let client = test_state.api_client;
     let form = serde_json::json!({
-        "username": "foo",
+        "username": "bob",
         "password": "secret",
     });
 

@@ -1,16 +1,12 @@
-use axum::{
-    response::{IntoResponse, Redirect},
-    routing::get,
-    Router,
-};
+use axum::{http::StatusCode, response::IntoResponse, routing::post, Router};
 use axum_sessions::extractors::WritableSession;
 
 pub fn routes() -> Router {
-    Router::new().route("/", get(get_signout))
+    Router::new().route("/", post(post_signout))
 }
 
-async fn get_signout(mut session: WritableSession) -> impl IntoResponse {
+async fn post_signout(mut session: WritableSession) -> impl IntoResponse {
     session.destroy();
 
-    Redirect::to("/oauth/signin")
+    StatusCode::OK
 }

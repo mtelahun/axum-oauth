@@ -12,41 +12,6 @@ struct AuthorizationQuery {
 }
 
 #[tokio::test]
-pub async fn register_client_get_form() {
-    // Arrange
-    let state = spawn_app().await;
-    let client = state.api_client;
-
-    // Act
-    let response = client
-        .get(&format!("{}/oauth/client", &state.app_address))
-        .send()
-        .await
-        .expect("request to server api failed");
-
-    // Assert
-    assert_eq!(
-        response.status().as_u16(),
-        200,
-        "client registration form loads successfully"
-    );
-    let text = response.text().await.expect("Failed to get response body");
-    assert!(
-        text.contains(r#"<form method="post">
-      <input type="text" name="name" placeholder="Name" aria-label="Name" required>
-      <input type="url" name="redirect_uri" placeholder="Redirect URL" aria-label="Redirect URL" required>
-      <label for="type">Client type</label>
-      <select name="type" id="type" required>
-        <option value="public" selected>Public</option>
-        <option value="confidential">Confidential</option>
-      </select>
-      <button type="submit" class="contrast">Register client</button>
-    </form>"#),
-        "Response body contains client registration form"
-    )
-}
-
-#[tokio::test]
 pub async fn register_client_form_errors() {
     // Arrange
     let state = spawn_app().await;
@@ -205,7 +170,7 @@ pub async fn happy_path_confidential_client_authorization_flow() {
         "redirect_uri": "http://localhost:3001/endpoint",
         "type": "confidential",
     });
-    state.signin("foo", "secret").await;
+    state.signin("bob", "secret").await;
     let res = state
         .register_client(&params, ClientType::Confidential)
         .await;
@@ -254,7 +219,7 @@ pub async fn happy_path_confidential_client_authorization_flow() {
     let params = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", &refresh_token),
-        ("scope", "account:read account:write account:follow"),
+        ("scope", "account:read account:write"),
     ];
     let refreshed_token = state
         .refresh_token(
@@ -266,8 +231,9 @@ pub async fn happy_path_confidential_client_authorization_flow() {
         .await;
 
     // Assert - 3
+    let json_user = r#""login":"bob","name":"Robert","authorized_clients":"#;
     state
-        .access_resource_success(&refreshed_token.access_token.unwrap(), ":foo")
+        .access_resource_success(&refreshed_token.access_token.unwrap(), json_user)
         .await;
 }
 
@@ -281,7 +247,7 @@ pub async fn happy_path_public_client_authorization_flow() {
         "type": "public",
     });
     let res = state.register_client(&params, ClientType::Public).await;
-    state.signin("foo", "secret").await;
+    state.signin("bob", "secret").await;
 
     let code_verifier = pkce::code_verifier(128);
     let code_challenge = pkce::code_challenge(&code_verifier);
@@ -290,7 +256,7 @@ pub async fn happy_path_public_client_authorization_flow() {
         "response_type": "code",
         "redirect_uri": "http://localhost:3001/endpoint",
         "client_id": res.client_id.clone(),
-        "scope": "account:read account:write account:follow",
+        "scope": "account:read account:write",
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "state": csrf_token,
@@ -323,7 +289,7 @@ pub async fn happy_path_public_client_authorization_flow() {
     let params = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", &refresh_token),
-        ("scope", "account:read account:write account:follow"),
+        ("scope", "account:read account:write"),
     ];
     let refreshed_token = state
         .refresh_token(
@@ -335,8 +301,9 @@ pub async fn happy_path_public_client_authorization_flow() {
         .await;
 
     // Assert - 3
+    let json_user = r#""login":"bob","name":"Robert","authorized_clients":"#;
     state
-        .access_resource_success(&refreshed_token.access_token.unwrap(), ":foo")
+        .access_resource_success(&refreshed_token.access_token.unwrap(), json_user)
         .await;
 }
 
@@ -350,7 +317,7 @@ pub async fn happy_path_client_credentials_authorization_flow() {
         "redirect_uri": "http://localhost:3001/endpoint",
         "type": "confidential",
     });
-    state.signin("foo", "secret").await;
+    state.signin("bob", "secret").await;
     let res = state
         .register_client(&params, ClientType::Confidential)
         .await;

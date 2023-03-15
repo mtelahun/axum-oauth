@@ -1,6 +1,5 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use axum_oauth::{build_service, serve};
-use oxide_auth::endpoint::Solicitation;
 use oxide_auth_axum::WebError;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
@@ -65,43 +64,4 @@ impl From<WebError> for AuthError {
             },
         }
     }
-}
-
-pub fn consent_page_html(route: &str, solicitation: Solicitation) -> String {
-    tracing::debug!("enter consent_page_html()");
-    macro_rules! template {
-        () => {
-            "<html>'{0:}' (at {1:}) is requesting permission for '{2:}'
-<form method=\"post\">
-    <input type=\"submit\" value=\"Accept\" formaction=\"{4:}?{3:}&allow=true\">
-    <input type=\"submit\" value=\"Deny\" formaction=\"{4:}?{3:}&deny=true\">
-</form>
-</html>"
-        };
-    }
-
-    tracing::debug!("    solicitation.pre_grant()");
-    let grant = solicitation.pre_grant();
-    tracing::debug!("    solicitation.state()");
-    let state = solicitation.state();
-
-    let mut extra = vec![
-        ("response_type", "code"),
-        ("client_id", grant.client_id.as_str()),
-        ("redirect_uri", grant.redirect_uri.as_str()),
-    ];
-
-    if let Some(state) = state {
-        extra.push(("state", state));
-    }
-
-    tracing::debug!("    displaying template...");
-    format!(
-        template!(),
-        grant.client_id,
-        grant.redirect_uri,
-        grant.scope,
-        serde_urlencoded::to_string(extra).unwrap(),
-        &route,
-    )
 }

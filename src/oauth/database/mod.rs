@@ -94,11 +94,6 @@ impl Database {
         Err(StoreError::DoesNotExist)
     }
 
-    pub async fn contains_user_id(&self, id: &UserId) -> bool {
-        let map_lock = self.inner.user_db.read().await;
-        map_lock.contains_key(id)
-    }
-
     pub async fn contains_user_name(&self, username: &str) -> bool {
         match self.get_user_by_name(username).await {
             Ok(record) => record.username == username,
@@ -216,28 +211,6 @@ impl Database {
             // couldn't find client authorization, insert a new one
             tracing::debug!("  unable to find authorization, inserting new one");
             record.add_authorized_client(client_id, scope);
-        }
-
-        Err(StoreError::DoesNotExist)
-    }
-
-    pub async fn update_client_scope_from_str(
-        &self,
-        user_id: UserId,
-        client_id: ClientId,
-        scope: &str,
-    ) -> Result<(), StoreError> {
-        let mut map_write = self.inner.user_db.write().await;
-        let record = map_write.get_mut(&user_id);
-        if record.is_some() {
-            let auth_list: &mut Vec<ClientAuthorization> =
-                record.unwrap().get_authorized_clients_mut();
-            for auth in auth_list.iter_mut() {
-                if auth.client_id == client_id {
-                    auth.scope = Scope::from_str(scope).map_err(|_| StoreError::InternalError)?;
-                    return Ok(());
-                }
-            }
         }
 
         Err(StoreError::DoesNotExist)

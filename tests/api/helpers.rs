@@ -161,11 +161,11 @@ impl TestState {
             "The authorization endpoint returned a consent page that shows the client name"
         );
         assert!(
-            body.contains("<h4>foo client wants access to your <em>foo</em> account"),
+            body.contains("<h4>foo client wants access to your <em>bob</em> account"),
             "The authorization endpoint returned a consent page that shows the target resource"
         );
         // let token: Token = serde_json::from_str(body.as_str()).unwrap();
-        // for s in ["account:read", "account:write", "account:follow"] {
+        // for s in ["account:read", "account:write"] {
         //     assert!(token.scope.contains(s), "Token scope includes {}", s);
         // }
 
@@ -201,11 +201,11 @@ impl TestState {
             "The authorization endpoint returned a consent page that shows the client name"
         );
         assert!(
-            body.contains("<h4>foo client wants access to your <em>foo</em> account"),
+            body.contains("<h4>foo client wants access to your <em>bob</em> account"),
             "The authorization endpoint returned a consent page that shows the target resource"
         );
         // let token: Token = serde_json::from_str(body.as_str()).unwrap();
-        // for s in ["account:read", "account:write", "account:follow"] {
+        // for s in ["account:read", "account:write"] {
         //     assert!(token.scope.contains(s), "Token scope includes {}", s);
         // }
 
@@ -304,7 +304,7 @@ impl TestState {
         assert_eq!(status, 200, "Request for access token returns successfully");
         let token: Token = serde_json::from_str(token.as_str()).unwrap();
         assert_eq!(token.token_type, "bearer", "Token is a Bearer token");
-        for s in ["account:read", "account:write", "account:follow"] {
+        for s in ["account:read", "account:write"] {
             assert!(token.scope.contains(s), "Token scope includes {}", s);
         }
         assert!(
@@ -357,7 +357,7 @@ impl TestState {
         );
         let token: Token = serde_json::from_str(token.as_str()).unwrap();
         assert_eq!(token.token_type, "bearer", "Token is a Bearer token");
-        for s in ["account:read", "account:write", "account:follow"] {
+        for s in ["account:read", "account:write"] {
             assert!(token.scope.contains(s), "Token scope includes {}", s);
         }
         let new_token = token.access_token.clone().unwrap();
@@ -381,7 +381,7 @@ impl TestState {
         // Act
         let response = self
             .api_client
-            .get(&format!("{}/oauth/whoami", &self.app_address))
+            .get(&format!("{}/api/user", &self.app_address))
             .bearer_auth(token)
             .send()
             .await
@@ -394,6 +394,7 @@ impl TestState {
             "Access to protected resource succeeded"
         );
         let body = response.text().await.unwrap();
+        tracing::debug!("protected resource: {}", body);
         assert!(
             body.contains(substr),
             "Confirm access to protected resource"
@@ -408,7 +409,7 @@ impl TestState {
             "response_type": "code",
             "redirect_uri": "http://localhost:3001/endpoint",
             "client_id": client.client_id.clone(),
-            "scope": "account:read account:write account:follow",
+            "scope": "account:read account:write",
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
             "state": csrf_token,

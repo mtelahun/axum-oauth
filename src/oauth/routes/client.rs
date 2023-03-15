@@ -1,13 +1,12 @@
 use crate::oauth::{
     database::Database,
     error::{Error, Result},
-    templates,
 };
 
 use axum::{
     extract::{Form, FromRef, State},
     response::{IntoResponse, Json},
-    routing::get,
+    routing::post,
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -17,11 +16,7 @@ where
     S: Send + Sync + 'static + Clone,
     Database: FromRef<S>,
 {
-    Router::new().route("/", get(get_client).post(post_client))
-}
-
-async fn get_client() -> impl IntoResponse {
-    templates::Client.into_response()
+    Router::new().route("/", post(post_client))
 }
 
 #[derive(Deserialize)]

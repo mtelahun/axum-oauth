@@ -53,12 +53,8 @@ impl OwnerSolicitor<OAuthRequest> for Solicitor {
             Err(err) => return err,
         };
 
-        // XXX - TODO Is there already an authorization (user:client pair) ?
-        // let user_client_id = match client_id.to_user_client_id().map_err(map_err) {
-        //     Ok(id) => id,
-        //     Err(err) => return err,
-        // };
-
+        // Is there already an authorization (user:client pair) ?
+        //
         let previous_scope = self.db.get_scope(self.user.user_id, client_id.id).await;
         let authorization = previous_scope.map(|scope| Authorization { scope });
 

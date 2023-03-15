@@ -20,6 +20,7 @@ pub enum Error {
     OAuth {
         source: oxide_auth_axum::WebError,
     },
+    ResourceConflict,
     InternalError,
 }
 
@@ -35,6 +36,7 @@ impl std::fmt::Display for Error {
             Error::Hash { source } => write!(f, "Invalid hash in database"),
             Error::OAuth { source } => write!(f, "{source}"),
             Error::InternalError => write!(f, "Unexpected internal error"),
+            Error::ResourceConflict => write!(f, "User already exists"),
         }
     }
 }
@@ -48,6 +50,7 @@ impl std::error::Error for Error {
             Error::Hash { source } => Some(source),
             Error::OAuth { source } => Some(source),
             Error::InternalError => None,
+            Error::ResourceConflict => None,
         }
     }
 }
@@ -56,6 +59,8 @@ impl IntoResponse for Error {
     fn into_response(self) -> Response {
         if let Self::OAuth { source } = self {
             source.into_response()
+        } else if let Self::ResourceConflict = self {
+            (StatusCode::CONFLICT, "User already exists").into_response()
         } else {
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
