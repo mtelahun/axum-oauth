@@ -1,6 +1,7 @@
 use async_session::MemoryStore;
 use axum::Router;
 use std::net::TcpListener;
+use tower_http::services::ServeDir;
 
 pub mod oauth;
 pub mod routes;
@@ -59,6 +60,7 @@ async fn get_router() -> Router {
     };
 
     Router::new()
+        .nest_service("/assets", ServeDir::new("assets"))
         .nest("/oauth", crate::oauth::routes::routes())
         .nest("/api", routes::routes())
         .with_state(state)
