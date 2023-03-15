@@ -3,6 +3,7 @@ use axum::Router;
 use std::net::TcpListener;
 
 pub mod oauth;
+pub mod routes;
 pub mod state;
 
 use oauth::database::Database as AuthDB;
@@ -40,7 +41,7 @@ pub async fn serve(app: Router, listener: TcpListener) {
 async fn get_router() -> Router {
     let mut auth_db = AuthDB::new();
     let _ = auth_db
-        .register_user("foo", Secret::from("secret".to_string()))
+        .register_user("bob", Secret::from("secret".to_string()), "Robert")
         .await;
     let _ = auth_db
         .register_public_client(
@@ -59,5 +60,6 @@ async fn get_router() -> Router {
 
     Router::new()
         .nest("/oauth", crate::oauth::routes::routes())
+        .nest("/api", routes::routes())
         .with_state(state)
 }

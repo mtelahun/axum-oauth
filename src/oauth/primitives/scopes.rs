@@ -1,4 +1,4 @@
-use crate::oauth::rhodos_scopes;
+use crate::oauth::scopes;
 
 pub struct Grant<S = ()> {
     pub grant: oxide_auth::primitives::grant::Grant,
@@ -16,7 +16,7 @@ impl<State, Scope> FromRequestParts<State> for Grant<Scope>
 where
     super::super::state::State: FromRef<State>,
     State: Send + Sync + 'static,
-    Scope: rhodos_scopes::Scope,
+    Scope: scopes::Scope,
 {
     type Rejection = Result<OAuthResponse, WebError>;
 

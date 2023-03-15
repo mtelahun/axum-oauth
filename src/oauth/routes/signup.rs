@@ -1,4 +1,4 @@
-use super::{Callback, UserForm};
+use super::{Callback, SignUpForm};
 use crate::oauth::{database::Database, error::Result, templates::SignUp};
 use axum::{
     extract::{Form, FromRef, Query, State},
@@ -27,14 +27,18 @@ async fn get_signup(query: Option<Query<Callback<'_>>>) -> impl IntoResponse {
 async fn post_signup(
     State(mut db): State<Database>,
     _query: Option<Query<Callback<'_>>>,
-    Form(user): Form<UserForm>,
+    Form(user): Form<SignUpForm>,
 ) -> Result<impl IntoResponse> {
     if db.contains_user_name(&user.username).await {
         return Ok(Redirect::to("signin"));
     }
 
-    db.register_user(&user.username, Secret::from(user.password))
-        .await;
+    db.register_user(
+        &user.username,
+        Secret::from(user.password),
+        &user.given_name,
+    )
+    .await;
 
     Ok(Redirect::to("/"))
 }

@@ -1,9 +1,5 @@
-use crate::oauth::{
-    database::Database,
-    primitives::scopes::Grant,
-    rhodos_scopes::{Account, Write},
-};
-use axum::{extract::FromRef, response::IntoResponse, routing::get, Json, Router};
+use crate::oauth::database::Database;
+use axum::{extract::FromRef, Router};
 use axum_sessions::{async_session::MemoryStore, PersistencePolicy, SameSite, SessionLayer};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -70,21 +66,14 @@ where
 
     Router::new()
         .merge(oauth::routes())
-        .merge(index::routes())
         .nest("/client", client::routes())
         .nest("/signin", signin::routes())
         .nest("/signout", signout::routes().with_state(()))
         .nest("/signup", signup::routes())
-        .route("/whoami", get(whoami))
         .layer(session_layer)
 }
 
-async fn whoami(grant: Grant<Write<Account>>) -> impl IntoResponse {
-    Json(grant.grant.owner_id)
-}
-
 mod client;
-mod index;
 mod oauth;
 mod signin;
 mod signout;
@@ -108,7 +97,14 @@ impl<'a> Callback<'a> {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct UserForm {
+pub struct LoginForm {
     pub username: String,
     pub password: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct SignUpForm {
+    pub username: String,
+    pub password: String,
+    pub given_name: String,
 }

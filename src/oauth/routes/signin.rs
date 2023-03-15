@@ -1,4 +1,4 @@
-use super::{Callback, UserForm};
+use super::{Callback, LoginForm};
 use crate::oauth::{
     database::{resource::user::AuthUser, Database},
     error::{Error, Result},
@@ -35,7 +35,7 @@ async fn post_signin(
     State(db): State<Database>,
     query: Option<Query<Callback<'_>>>,
     mut session: WritableSession,
-    Form(user_form): Form<UserForm>,
+    Form(user_form): Form<LoginForm>,
 ) -> Result<impl IntoResponse> {
     let query = query.as_ref().map(|x| x.as_str());
 
