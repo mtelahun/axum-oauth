@@ -17,10 +17,7 @@ pub async fn build_service(
 ) -> (Router, TcpListener) {
     let router = get_router().await;
 
-    let mut addr = format!("0.0.0.0:{server_port}");
-    if bind_address.is_some() {
-        addr = bind_address.unwrap();
-    }
+    let addr = bind_address.unwrap_or_else(|| format!("0.0.0.0:{server_port}"));
     let listener = TcpListener::bind(addr)
         .map_err(|e| {
             eprintln!("unable to parse local address: {e}");

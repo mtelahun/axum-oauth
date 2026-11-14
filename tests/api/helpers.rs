@@ -50,7 +50,6 @@ where
 #[derive(Debug, Default)]
 pub struct TestState {
     pub app_address: String,
-    pub port: u16,
     pub api_client: reqwest::Client,
     pub token: Token,
 }
@@ -64,7 +63,7 @@ impl TestState {
 
         let response = self
             .api_client
-            .post(&format!("{}/oauth/signin", &self.app_address))
+            .post(format!("{}/oauth/signin", &self.app_address))
             .form(&form)
             .send()
             .await
@@ -85,7 +84,7 @@ impl TestState {
         // Act
         let response = self
             .api_client
-            .post(&format!("{}/oauth/client", self.app_address))
+            .post(format!("{}/oauth/client", self.app_address))
             .form(params)
             .send()
             .await
@@ -214,7 +213,7 @@ impl TestState {
 
     pub async fn owner_consent_allow(&self, body: &str) -> String {
         let re_action = Regex::new("formaction=\"(.*)\"").unwrap();
-        let caps = re_action.captures(&body).unwrap();
+        let caps = re_action.captures(body).unwrap();
         let allow_path = caps.get(1).map_or("/", |m| m.as_str());
         let allow_path = urlencoding::decode(allow_path).expect("failed to decode formaction");
         let allow_path = html_escape::decode_html_entities(&allow_path);
@@ -255,13 +254,13 @@ impl TestState {
             .expect("failed to get redirect location");
         tracing::debug!("Client redirect: {}", location);
         let re_code = Regex::new("\\?code=(.*)\\&").unwrap();
-        let caps = re_code.captures(&location).unwrap();
+        let caps = re_code.captures(location).unwrap();
         let code = caps.get(1).map_or("X", |m| m.as_str());
         let code = urlencoding::decode(code).expect("failed to decode authorization code");
         tracing::debug!("Extracted code: {}", code);
 
         let re_code = Regex::new("\\&state=(.*)").unwrap();
-        let caps = re_code.captures(&location).unwrap();
+        let caps = re_code.captures(location).unwrap();
         let state = caps.get(1).map_or("X", |m| m.as_str());
         let state = urlencoding::decode(state).expect("failed to decode state");
         tracing::debug!("Extracted state: {}", state);
@@ -308,11 +307,11 @@ impl TestState {
             assert!(token.scope.contains(s), "Token scope includes {}", s);
         }
         assert!(
-            !token.access_token.is_none(),
+            token.access_token.is_some(),
             "Access token contains a value"
         );
         assert!(
-            !token.refresh_token.is_none(),
+            token.refresh_token.is_some(),
             "Refresh token contains a value"
         );
         assert!(
@@ -362,11 +361,11 @@ impl TestState {
         }
         let new_token = token.access_token.clone().unwrap();
         assert!(
-            !token.access_token.is_none() && new_token != str_old_token,
+            token.access_token.is_some() && new_token != str_old_token,
             "New access token is different from the previous token"
         );
         assert!(
-            !token.refresh_token.is_none(),
+            token.refresh_token.is_some(),
             "Refresh token contains a value"
         );
         assert!(
@@ -381,7 +380,7 @@ impl TestState {
         // Act
         let response = self
             .api_client
-            .get(&format!("{}/api/user", &self.app_address))
+            .get(format!("{}/api/user", &self.app_address))
             .bearer_auth(token)
             .send()
             .await
@@ -471,7 +470,6 @@ pub async fn spawn_app() -> TestState {
 
     let res = TestState {
         app_address: format!("http://localhost:{}", port),
-        port: port,
         api_client: reqwest_client,
         ..Default::default()
     };
@@ -512,11 +510,6 @@ pub fn assert_is_redirect_to(
             "partial match to initial part of redirect location"
         )
     }
-}
-
-#[derive(Debug, Serialize)]
-struct AuthorizationCode {
-    code: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

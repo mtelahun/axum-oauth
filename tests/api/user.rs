@@ -8,7 +8,7 @@ pub async fn unauthenticated_access() {
 
     // Act
     let response = client
-        .get(&format!("{}/api/user", &state.app_address))
+        .get(format!("{}/api/user", &state.app_address))
         .send()
         .await
         .expect("request to client api failed");
@@ -39,7 +39,7 @@ pub async fn happy_path_authenticated_access() {
     // Act
     let client = state.api_client;
     let response = client
-        .get(&format!("{}/api/user", &state.app_address))
+        .get(format!("{}/api/user", &state.app_address))
         .bearer_auth(state.token.access_token.unwrap())
         .send()
         .await

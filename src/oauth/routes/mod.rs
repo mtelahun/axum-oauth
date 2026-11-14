@@ -1,8 +1,11 @@
 use crate::oauth::database::Database;
 use axum::{extract::FromRef, Router};
-use tower_sessions::{cookie::{Key, SameSite}, MemoryStore, SessionManagerLayer};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use tower_sessions::{
+    cookie::{Key, SameSite},
+    MemoryStore, SessionManagerLayer,
+};
 
 mod session {
     use crate::oauth::database::resource::user::AuthUser;
