@@ -1,4 +1,5 @@
 use askama::Template;
+use axum::response::{Html, IntoResponse, Response};
 
 use oxide_auth::endpoint::WebRequest;
 
@@ -6,6 +7,16 @@ use oxide_auth::endpoint::WebRequest;
 #[template(path = "signin.html")]
 pub struct SignIn<'a> {
     pub query: &'a str,
+}
+
+// askama_axum only supports axum 0.6, so render by hand.
+impl IntoResponse for SignIn<'_> {
+    fn into_response(self) -> Response {
+        match self.render() {
+            Ok(html) => Html(html).into_response(),
+            Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
 }
 
 #[derive(Template, Debug)]

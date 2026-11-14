@@ -36,7 +36,7 @@ full life-cycle example.~~ This project now has a frontend built in [SvelteKit](
 3. Change directory into the front-end: `cd svelte-frontend`
 4. Run `npm install`
 5. Run `npm run dev`
-6. Open your browse to http://localhost:5137
+6. Open your browse to http://localhost:5173
 7. Click the button that says "Sign-in with OAuth"
 8. Use the default username/password pair to sign-in to the backend: `bob/secret`
     

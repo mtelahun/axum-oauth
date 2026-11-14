@@ -31,12 +31,11 @@ pub async fn build_service(
 }
 
 pub async fn serve(app: Router, listener: TcpListener) {
-    axum::Server::from_tcp(listener)
+    listener.set_nonblocking(true).unwrap();
+    let listener = tokio::net::TcpListener::from_std(listener)
         .map_err(|e| eprintln!("{e}"))
-        .unwrap()
-        .serve(app.into_make_service())
-        .await
         .unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn get_router() -> Router {

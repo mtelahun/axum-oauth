@@ -18,7 +18,7 @@ async fn signout_ok() {
     // Act
     let client = state.api_client;
     let response = client
-        .post(&format!("{}/oauth/signout/", &state.app_address))
+        .post(&format!("{}/oauth/signout", &state.app_address))
         .bearer_auth(state.token.access_token.unwrap())
         .send()
         .await

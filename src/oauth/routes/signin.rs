@@ -6,13 +6,13 @@ use crate::oauth::{
 };
 
 use axum::{
-    extract::{Form, FromRef, Query, State},
+    extract::{rejection::QueryRejection, Form, FromRef, Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
     routing::get,
     Router,
 };
-use axum_sessions::extractors::WritableSession;
+use tower_sessions::Session;
 
 pub fn routes<S>() -> Router<S>
 where
@@ -23,8 +23,9 @@ where
     Router::new().route("/", get(get_signin).post(post_signin))
 }
 
-async fn get_signin(query: Option<Query<Callback<'_>>>) -> impl IntoResponse {
+async fn get_signin(query: Result<Query<Callback<'static>>, QueryRejection>) -> impl IntoResponse {
     let query = &query
+        .ok()
         .as_ref()
         .and_then(|Query(x)| serde_urlencoded::to_string(x).ok())
         .unwrap_or_default();
@@ -33,10 +34,11 @@ async fn get_signin(query: Option<Query<Callback<'_>>>) -> impl IntoResponse {
 
 async fn post_signin(
     State(db): State<Database>,
-    query: Option<Query<Callback<'_>>>,
-    mut session: WritableSession,
+    query: Result<Query<Callback<'static>>, QueryRejection>,
+    session: Session,
     Form(user_form): Form<LoginForm>,
 ) -> Result<impl IntoResponse> {
+    let query = query.ok();
     let query = query.as_ref().map(|x| x.as_str());
 
     tracing::debug!("entered -> post_signin()");
@@ -56,13 +58,15 @@ async fn post_signin(
         .verify_password(&user_form.username, &user_form.password)
         .await
         .map_err(|e| Error::Database { source: (e) })?;
-    let _ = session.insert(
-        "user",
-        AuthUser {
-            user_id: user_record.id().unwrap(),
-            username: user_form.username,
-        },
-    );
+    let _ = session
+        .insert(
+            "user",
+            AuthUser {
+                user_id: user_record.id().unwrap(),
+                username: user_form.username,
+            },
+        )
+        .await;
 
     tracing::debug!("    checking authorization");
     if !authorized {
