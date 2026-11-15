@@ -140,3 +140,31 @@ async fn signin_ignores_offsite_callback() {
         assert_is_redirect_to(&response, 303, expected, false);
     }
 }
+
+#[tokio::test]
+async fn wrong_password_does_not_create_session() {
+    // Arrange
+    let test_state = spawn_app().await;
+    let client = &test_state.api_client;
+    let form = serde_json::json!({
+        "username": "bob",
+        "password": "not_my_secret",
+    });
+    let response = client
+        .post(format!("{}/oauth/signin", test_state.app_address))
+        .form(&form)
+        .send()
+        .await
+        .expect("request to server api failed");
+    assert_eq!(response.status().as_u16(), 401);
+
+    // Act
+    let response = client
+        .get(format!("{}/oauth/authorize", test_state.app_address))
+        .send()
+        .await
+        .expect("request to server api failed");
+
+    // Assert
+    assert_is_redirect_to(&response, 303, "/oauth/signin?", true);
+}
