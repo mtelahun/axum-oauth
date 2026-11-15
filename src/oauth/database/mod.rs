@@ -210,6 +210,7 @@ impl Database {
             // couldn't find client authorization, insert a new one
             tracing::debug!("  unable to find authorization, inserting new one");
             record.add_authorized_client(client_id, scope);
+            return Ok(());
         }
 
         Err(StoreError::DoesNotExist)
@@ -314,5 +315,40 @@ impl std::fmt::Display for StoreError {
             StoreError::DuplicateRecord => write!(f, "attempted to insert duplicate record"),
             StoreError::InternalError => write!(f, "an unexpected internal error occurred"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn update_client_scope_inserts_and_updates_authorization() {
+        let mut db = Database::new();
+        let user_id = db
+            .register_user("alice", Secret::from("pw".to_string()), "Alice")
+            .await;
+        let client_id = ClientId::new();
+        let read: Scope = "account:read".parse().unwrap();
+        let read_write: Scope = "account:read account:write".parse().unwrap();
+
+        // First authorization for this client is inserted.
+        db.update_client_scope(user_id, client_id, read.clone())
+            .await
+            .expect("inserting a new authorization succeeds");
+        assert_eq!(db.get_scope(user_id, client_id).await, Some(read));
+
+        // An existing authorization is updated in place.
+        db.update_client_scope(user_id, client_id, read_write.clone())
+            .await
+            .expect("updating an existing authorization succeeds");
+        assert_eq!(db.get_scope(user_id, client_id).await, Some(read_write));
+
+        // Unknown users are still an error.
+        assert!(matches!(
+            db.update_client_scope(UserId::new(), client_id, "account:read".parse().unwrap())
+                .await,
+            Err(StoreError::DoesNotExist)
+        ));
     }
 }
