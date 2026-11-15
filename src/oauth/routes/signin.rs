@@ -39,7 +39,10 @@ async fn post_signin(
     Form(user_form): Form<LoginForm>,
 ) -> Result<impl IntoResponse> {
     let query = query.ok();
-    let query = query.as_ref().map(|x| x.as_str());
+    let query = query
+        .as_ref()
+        .map(|x| x.as_str())
+        .filter(|cb| is_local_callback(cb));
 
     tracing::debug!("entered -> post_signin()");
     let user_record = db.get_user_by_name(&user_form.username).await;
@@ -58,6 +61,20 @@ async fn post_signin(
         .verify_password(&user_form.username, &user_form.password)
         .await
         .map_err(|e| Error::Database { source: (e) })?;
+
+    tracing::debug!("    checking authorization");
+    if !authorized {
+        tracing::debug!("        NOT authorized");
+        return Ok((
+            StatusCode::UNAUTHORIZED,
+            SignIn {
+                query: query.unwrap_or_default(),
+            },
+        )
+            .into_response());
+    }
+
+    // Bind the user to the session only after the password has been verified.
     let _ = session
         .insert(
             "user",
@@ -68,17 +85,7 @@ async fn post_signin(
         )
         .await;
 
-    tracing::debug!("    checking authorization");
-    if !authorized {
-        tracing::debug!("        NOT authorized");
-        Ok((
-            StatusCode::UNAUTHORIZED,
-            SignIn {
-                query: query.unwrap_or_default(),
-            },
-        )
-            .into_response())
-    } else if let Some(query) = query {
+    if let Some(query) = query {
         if !query.is_empty() {
             tracing::debug!("    redirect to callback: {}", query);
             Ok(Redirect::to(query).into_response())
@@ -90,4 +97,11 @@ async fn post_signin(
         tracing::debug!("    redirect to /oauth/");
         Ok(Redirect::to("/oauth/").into_response())
     }
+}
+
+/// A callback is only followed if it resolves to this server; anything else is an open redirect.
+fn is_local_callback(callback: &str) -> bool {
+    let base = url::Url::parse("http://localhost/oauth/signin").unwrap();
+    base.join(callback)
+        .is_ok_and(|url| url.origin() == base.origin())
 }
