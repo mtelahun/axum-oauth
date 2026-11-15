@@ -350,3 +350,34 @@ pub async fn happy_path_client_credentials_authorization_flow() {
         .access_resource_success(&token.access_token.unwrap(), res.client_id.clone().as_str())
         .await;
 }
+
+#[tokio::test]
+async fn register_client_invalid_redirect_uri() {
+    // Arrange
+    let test_state = spawn_app().await;
+
+    for client_type in ["public", "confidential"] {
+        let form = serde_json::json!({
+            "name": "foo client",
+            "redirect_uri": "not a url",
+            "type": client_type,
+        });
+
+        // Act
+        let response = test_state
+            .api_client
+            .post(format!("{}/oauth/client", test_state.app_address))
+            .form(&form)
+            .send()
+            .await
+            .expect("request to server api failed");
+
+        // Assert
+        assert_eq!(
+            response.status().as_u16(),
+            422,
+            "{} client with invalid redirect_uri is rejected",
+            client_type
+        );
+    }
+}

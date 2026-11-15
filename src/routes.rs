@@ -44,7 +44,7 @@ pub async fn user(
     tracing::debug!("enter -> user()");
     let u = grant.grant.owner_id;
     let user_record = db
-        .get_user_by_id(&AuthUser::from_str(&u).unwrap())
+        .get_user_by_id(&AuthUser::from_str(&u).map_err(|e| Error::InvalidKey { source: e })?)
         .await
         .map_err(|e| Error::Database { source: e })?;
     let authorized_clients = user_record.get_authorized_clients();
@@ -88,7 +88,10 @@ async fn update_account_name(
     tracing::debug!("enter -> update_account_name()");
     let u = grant.grant.owner_id;
     let success = db
-        .update_given_name_by_id(&AuthUser::from_str(&u).unwrap(), &form.given_name)
+        .update_given_name_by_id(
+            &AuthUser::from_str(&u).map_err(|e| Error::InvalidKey { source: e })?,
+            &form.given_name,
+        )
         .await
         .map_err(|e| Error::Database { source: e })?;
 
