@@ -58,6 +58,20 @@ async fn post_signin(
         .verify_password(&user_form.username, &user_form.password)
         .await
         .map_err(|e| Error::Database { source: (e) })?;
+
+    tracing::debug!("    checking authorization");
+    if !authorized {
+        tracing::debug!("        NOT authorized");
+        return Ok((
+            StatusCode::UNAUTHORIZED,
+            SignIn {
+                query: query.unwrap_or_default(),
+            },
+        )
+            .into_response());
+    }
+
+    // Bind the user to the session only after the password has been verified.
     let _ = session
         .insert(
             "user",
@@ -68,17 +82,7 @@ async fn post_signin(
         )
         .await;
 
-    tracing::debug!("    checking authorization");
-    if !authorized {
-        tracing::debug!("        NOT authorized");
-        Ok((
-            StatusCode::UNAUTHORIZED,
-            SignIn {
-                query: query.unwrap_or_default(),
-            },
-        )
-            .into_response())
-    } else if let Some(query) = query {
+    if let Some(query) = query {
         if !query.is_empty() {
             tracing::debug!("    redirect to callback: {}", query);
             Ok(Redirect::to(query).into_response())
