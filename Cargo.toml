@@ -1,6 +1,6 @@
 [package]
 name = "axum-oauth"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "OAuth2 authorization server built on axum and oxide-auth"
 license = "BSD-2-Clause"
