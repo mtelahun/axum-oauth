@@ -108,3 +108,35 @@ async fn happy_path_signin_form() {
     );
     assert_is_redirect_to(&response, 303, "/oauth/", false);
 }
+
+#[tokio::test]
+async fn signin_ignores_offsite_callback() {
+    // Arrange
+    let test_state = spawn_app().await;
+    let form = serde_json::json!({
+        "username": "bob",
+        "password": "secret",
+    });
+    let cases = [
+        ("https://evil.example/", "/oauth/"),
+        ("//evil.example/", "/oauth/"),
+        ("/\\evil.example/", "/oauth/"),
+        ("javascript:alert(1)", "/oauth/"),
+        ("authorize?client_id=foo", "authorize?client_id=foo"),
+    ];
+
+    for (callback, expected) in cases {
+        // Act
+        let response = test_state
+            .api_client
+            .post(format!("{}/oauth/signin", test_state.app_address))
+            .query(&[("callback", callback)])
+            .form(&form)
+            .send()
+            .await
+            .expect("request to server api failed");
+
+        // Assert
+        assert_is_redirect_to(&response, 303, expected, false);
+    }
+}

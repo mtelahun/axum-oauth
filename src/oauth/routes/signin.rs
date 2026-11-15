@@ -39,7 +39,10 @@ async fn post_signin(
     Form(user_form): Form<LoginForm>,
 ) -> Result<impl IntoResponse> {
     let query = query.ok();
-    let query = query.as_ref().map(|x| x.as_str());
+    let query = query
+        .as_ref()
+        .map(|x| x.as_str())
+        .filter(|cb| is_local_callback(cb));
 
     tracing::debug!("entered -> post_signin()");
     let user_record = db.get_user_by_name(&user_form.username).await;
@@ -90,4 +93,11 @@ async fn post_signin(
         tracing::debug!("    redirect to /oauth/");
         Ok(Redirect::to("/oauth/").into_response())
     }
+}
+
+/// A callback is only followed if it resolves to this server; anything else is an open redirect.
+fn is_local_callback(callback: &str) -> bool {
+    let base = url::Url::parse("http://localhost/oauth/signin").unwrap();
+    base.join(callback)
+        .is_ok_and(|url| url.origin() == base.origin())
 }
