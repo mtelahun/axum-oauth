@@ -89,10 +89,7 @@ pub async fn happy_path_register_client_confidential() {
         .await
         .expect("Failed to get response body");
 
-    let client_secret = res
-        .client_secret
-        .clone()
-        .unwrap_or(String::new());
+    let client_secret = res.client_secret.clone().unwrap_or(String::new());
 
     assert!(
         !res.client_id.is_empty(),
@@ -138,10 +135,7 @@ pub async fn happy_path_register_client_public() {
         .json::<ClientResponse>()
         .await
         .expect("Failed to get response body");
-    let client_secret = res
-        .client_secret
-        .clone()
-        .unwrap_or(String::new());
+    let client_secret = res.client_secret.clone().unwrap_or(String::new());
     assert!(
         !res.client_id.is_empty(),
         "The client_id field of the response is NOT empty"
