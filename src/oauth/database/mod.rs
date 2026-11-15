@@ -358,4 +358,37 @@ mod tests {
             Err(StoreError::DoesNotExist)
         ));
     }
+
+    #[tokio::test]
+    async fn register_client_rejects_invalid_input() {
+        let mut db = Database::new();
+        let cases = [
+            ("not a url", "account:read", "invalid redirect url"),
+            ("https://example.com/cb", "bad\"scope", "invalid scope"),
+        ];
+
+        for (url, scope, msg) in cases {
+            assert!(
+                matches!(
+                    db.register_public_client("c", url, scope).await,
+                    Err(StoreError::InvalidInput)
+                ),
+                "public client: {msg}"
+            );
+            assert!(
+                matches!(
+                    db.register_confidential_client("c", url, scope).await,
+                    Err(StoreError::InvalidInput)
+                ),
+                "confidential client: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_input_error_describes_itself() {
+        let err = StoreError::InvalidInput;
+        assert_eq!(err.to_string(), "the input is not valid");
+        assert!(std::error::Error::source(&err).is_none());
+    }
 }
