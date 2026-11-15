@@ -11,7 +11,6 @@ use axum::{
 };
 use oxide_auth_axum::{OAuthResource, OAuthResponse, WebError};
 
-#[axum::async_trait]
 impl<State, Scope> FromRequestParts<State> for Grant<Scope>
 where
     super::super::state::State: FromRef<State>,

@@ -1,21 +1,23 @@
 use crate::oauth::database::Database;
 use axum::{extract::FromRef, Router};
-use axum_sessions::{async_session::MemoryStore, PersistencePolicy, SameSite, SessionLayer};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use tower_sessions::{
+    cookie::{Key, SameSite},
+    MemoryStore, SessionManagerLayer,
+};
 
 mod session {
     use crate::oauth::database::resource::user::AuthUser;
 
     use super::Callback;
     use axum::{extract::FromRequestParts, http::request::Parts, response::Redirect};
-    use axum_sessions::extractors::ReadableSession;
+    use tower_sessions::Session as TowerSession;
 
     pub struct Session {
         pub user: AuthUser,
     }
 
-    #[axum::async_trait]
     impl<S> FromRequestParts<S> for Session
     where
         S: Send + Sync + 'static,
@@ -24,10 +26,10 @@ mod session {
 
         async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
             tracing::debug!("Middleware: Session: parts: {:?}", parts);
-            let session = ReadableSession::from_request_parts(parts, state)
-                .await
-                .ok()
-                .and_then(|session| session.get("user"));
+            let session = match TowerSession::from_request_parts(parts, state).await {
+                Ok(session) => session.get::<AuthUser>("user").await.ok().flatten(),
+                Err(_) => None,
+            };
 
             if let Some(user) = session {
                 Ok(Self { user })
@@ -57,12 +59,12 @@ where
     Database: FromRef<S>,
     S: Send + Sync + 'static + Clone,
 {
-    let session_layer = SessionLayer::new(MemoryStore::new(), nanoid::nanoid!(128).as_bytes())
-        .with_cookie_name("axum_oauth")
+    let session_layer = SessionManagerLayer::new(MemoryStore::default())
+        .with_name("axum_oauth")
         .with_secure(true)
-        .with_persistence_policy(PersistencePolicy::ChangedOnly)
-        .with_cookie_path("/oauth/")
-        .with_same_site_policy(SameSite::Lax);
+        .with_path("/oauth/")
+        .with_same_site(SameSite::Lax)
+        .with_signed(Key::generate());
 
     Router::new()
         .merge(oauth::routes())

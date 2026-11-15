@@ -4,7 +4,7 @@ use crate::oauth::{
     error::{Error, Result},
 };
 use axum::{
-    extract::{Form, FromRef, Query, State},
+    extract::{rejection::QueryRejection, Form, FromRef, Query, State},
     http::StatusCode,
     routing::post,
     Router,
@@ -21,7 +21,7 @@ where
 
 async fn post_signup(
     State(mut db): State<Database>,
-    _query: Option<Query<Callback<'_>>>,
+    _query: Result<Query<Callback<'static>>, QueryRejection>,
     Form(user): Form<SignUpForm>,
 ) -> Result<StatusCode, Error> {
     if db.contains_user_name(&user.username).await {

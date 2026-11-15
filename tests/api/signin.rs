@@ -24,7 +24,7 @@ async fn signin_form_fields_problem() {
     for (case, msg) in invalid_cases {
         // Act
         let response = client
-            .post(&format!("{}/oauth/signin", &test_state.app_address))
+            .post(format!("{}/oauth/signin", test_state.app_address))
             .form(&case)
             .send()
             .await
@@ -65,7 +65,7 @@ async fn signin_form_wrong_credentials() {
     for (case, msg) in invalid_cases {
         // Act
         let response = client
-            .post(&format!("{}/oauth/signin", &test_state.app_address))
+            .post(format!("{}/oauth/signin", test_state.app_address))
             .form(&case)
             .send()
             .await
@@ -94,7 +94,7 @@ async fn happy_path_signin_form() {
 
     // Act
     let response = client
-        .post(&format!("{}/oauth/signin", &test_state.app_address))
+        .post(format!("{}/oauth/signin", test_state.app_address))
         .form(&form)
         .send()
         .await

@@ -176,8 +176,8 @@ impl Database {
         tracing::debug!("in get_scope()");
         let map_lock = self.inner.user_db.read().await;
         let record = map_lock.get(&user_id);
-        if record.is_some() {
-            let client_lst = record.unwrap().get_authorized_clients();
+        if let Some(record) = record {
+            let client_lst = record.get_authorized_clients();
             for auth in client_lst {
                 if auth.client_id == client_id {
                     tracing::debug!("  current scope: {:?}", auth.scope);
@@ -198,8 +198,7 @@ impl Database {
         tracing::debug!("in update_client_scope()");
         let mut map_write = self.inner.user_db.write().await;
         let record = map_write.get_mut(&user_id);
-        if record.is_some() {
-            let record = record.unwrap();
+        if let Some(record) = record {
             let auth_list: &mut Vec<ClientAuthorization> = record.get_authorized_clients_mut();
             for auth in auth_list.iter_mut() {
                 if auth.client_id == client_id {

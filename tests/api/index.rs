@@ -8,7 +8,7 @@ pub async fn index_not_found() {
 
     // Act
     let response = client
-        .get(&format!("{}/", &state.app_address))
+        .get(format!("{}/", state.app_address))
         .send()
         .await
         .expect("request to client api failed");
