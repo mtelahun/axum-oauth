@@ -377,7 +377,7 @@ impl TestState {
         // Act
         let response = self
             .api_client
-            .get(format!("{}/api/user", &self.app_address))
+            .get(format!("{}/api/user", self.app_address))
             .bearer_auth(token)
             .send()
             .await
