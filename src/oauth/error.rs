@@ -59,6 +59,11 @@ impl IntoResponse for Error {
     fn into_response(self) -> Response {
         if let Self::OAuth { source } = self {
             source.into_response()
+        } else if let Self::Database {
+            source: crate::oauth::database::StoreError::InvalidInput,
+        } = self
+        {
+            (StatusCode::UNPROCESSABLE_ENTITY, "Invalid input").into_response()
         } else if let Self::ResourceConflict = self {
             (StatusCode::CONFLICT, "User already exists").into_response()
         } else {

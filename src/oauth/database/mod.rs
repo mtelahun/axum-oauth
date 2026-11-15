@@ -124,8 +124,10 @@ impl Database {
         let id = ClientId::new();
         let client = Client::public(
             id.as_str(),
-            RegisteredUrl::Semantic(url.parse().unwrap()),
-            default_scope.parse().unwrap(),
+            RegisteredUrl::Semantic(url.parse().map_err(|_| StoreError::InvalidInput)?),
+            default_scope
+                .parse()
+                .map_err(|_| StoreError::InvalidInput)?,
         );
         tracing::debug!("Registering public client: {:?}", client);
 
@@ -147,8 +149,10 @@ impl Database {
         let secret = nanoid::nanoid!(32);
         let client = Client::confidential(
             id.as_str(),
-            RegisteredUrl::Semantic(url.parse().unwrap()),
-            default_scope.parse().unwrap(),
+            RegisteredUrl::Semantic(url.parse().map_err(|_| StoreError::InvalidInput)?),
+            default_scope
+                .parse()
+                .map_err(|_| StoreError::InvalidInput)?,
             secret.as_bytes(),
         );
         tracing::debug!("Registering confidential client: {:?}", &client);
@@ -296,6 +300,7 @@ pub enum StoreError {
     DoesNotExist,
     DuplicateRecord,
     InternalError,
+    InvalidInput,
 }
 
 impl std::error::Error for StoreError {
@@ -304,6 +309,7 @@ impl std::error::Error for StoreError {
             StoreError::DoesNotExist => None,
             StoreError::DuplicateRecord => None,
             StoreError::InternalError => None,
+            StoreError::InvalidInput => None,
         }
     }
 }
@@ -314,6 +320,7 @@ impl std::fmt::Display for StoreError {
             StoreError::DoesNotExist => write!(f, "the record does not exist"),
             StoreError::DuplicateRecord => write!(f, "attempted to insert duplicate record"),
             StoreError::InternalError => write!(f, "an unexpected internal error occurred"),
+            StoreError::InvalidInput => write!(f, "the input is not valid"),
         }
     }
 }
@@ -350,5 +357,38 @@ mod tests {
                 .await,
             Err(StoreError::DoesNotExist)
         ));
+    }
+
+    #[tokio::test]
+    async fn register_client_rejects_invalid_input() {
+        let mut db = Database::new();
+        let cases = [
+            ("not a url", "account:read", "invalid redirect url"),
+            ("https://example.com/cb", "bad\"scope", "invalid scope"),
+        ];
+
+        for (url, scope, msg) in cases {
+            assert!(
+                matches!(
+                    db.register_public_client("c", url, scope).await,
+                    Err(StoreError::InvalidInput)
+                ),
+                "public client: {msg}"
+            );
+            assert!(
+                matches!(
+                    db.register_confidential_client("c", url, scope).await,
+                    Err(StoreError::InvalidInput)
+                ),
+                "confidential client: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_input_error_describes_itself() {
+        let err = StoreError::InvalidInput;
+        assert_eq!(err.to_string(), "the input is not valid");
+        assert!(std::error::Error::source(&err).is_none());
     }
 }
