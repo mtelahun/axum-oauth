@@ -63,7 +63,7 @@ impl TestState {
 
         let response = self
             .api_client
-            .post(format!("{}/oauth/signin", &self.app_address))
+            .post(format!("{}/oauth/signin", self.app_address))
             .form(&form)
             .send()
             .await
@@ -103,7 +103,7 @@ impl TestState {
         let client_secret = res
             .client_secret
             .clone()
-            .map_or(String::new(), |secret| secret);
+            .unwrap_or(String::new());
         assert!(
             !res.client_id.is_empty(),
             "The client_id field of the response is NOT empty"

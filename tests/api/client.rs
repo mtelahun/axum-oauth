@@ -43,7 +43,7 @@ pub async fn register_client_form_errors() {
     for (case, msg) in invalid_cases {
         // Act
         let response = client
-            .post(format!("{}/oauth/client", &state.app_address))
+            .post(format!("{}/oauth/client", state.app_address))
             .form(&case)
             .send()
             .await
@@ -72,7 +72,7 @@ pub async fn happy_path_register_client_confidential() {
     // Act
     let response = state
         .api_client
-        .post(format!("{}/oauth/client", &state.app_address))
+        .post(format!("{}/oauth/client", state.app_address))
         .form(&params)
         .send()
         .await
@@ -92,7 +92,7 @@ pub async fn happy_path_register_client_confidential() {
     let client_secret = res
         .client_secret
         .clone()
-        .map_or(String::new(), |secret| secret);
+        .unwrap_or(String::new());
 
     assert!(
         !res.client_id.is_empty(),
@@ -122,7 +122,7 @@ pub async fn happy_path_register_client_public() {
     // Act
     let response = state
         .api_client
-        .post(format!("{}/oauth/client", &state.app_address))
+        .post(format!("{}/oauth/client", state.app_address))
         .form(&form)
         .send()
         .await
@@ -141,7 +141,7 @@ pub async fn happy_path_register_client_public() {
     let client_secret = res
         .client_secret
         .clone()
-        .map_or(String::new(), |secret| secret);
+        .unwrap_or(String::new());
     assert!(
         !res.client_id.is_empty(),
         "The client_id field of the response is NOT empty"
