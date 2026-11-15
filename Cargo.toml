@@ -2,6 +2,11 @@
 name = "axum-oauth"
 version = "0.1.0"
 edition = "2021"
+description = "OAuth2 authorization server built on axum and oxide-auth"
+license = "BSD-2-Clause"
+repository = "https://github.com/mtelahun/axum-oauth"
+readme = "README.md"
+exclude = ["svelte-frontend"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
